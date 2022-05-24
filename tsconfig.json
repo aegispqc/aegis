@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"target": "es2021",
+		"esModuleInterop": true,
+		"moduleResolution": "node",
+		"sourceMap": true,
+		"outDir": "./dist/",
+		"inlineSourceMap": false,
+		"inlineSources": true,
+		"declaration": false,
+		"noEmit": false
+	},
+	"files":[
+		"./index.ts"
+	],
+	"exclude": [
+		"node_modules" 
+	]
+}

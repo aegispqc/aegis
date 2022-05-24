@@ -1,0 +1,43 @@
+{
+	"name": "corets",
+	"version": "0.0.1",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"build-pqc-addon": "npm run build-falcon-round3 && npm run build-dilithium-round3",
+		"build-falcon-round3": "node-gyp configure --directory='./src/pqc/nistRound3/falcon' && node-gyp build --directory='./src/pqc/nistRound3/falcon'",
+		"build-dilithium-round3": "node-gyp configure --directory='./src/pqc/nistRound3/dilithium' && node-gyp build --directory='./src/pqc/nistRound3/dilithium'",
+		"clean-tsc": "rimraf dist/ && rimraf bin/ && mkdir bin/",
+		"copy-addon": "copyfiles -u 0 ./src/**/*.node ./dist/",
+		"build-tsc": "npm run clean-tsc && tsc && npm run copy-addon",
+		"copy-mineBin": "copyfiles -u 0 ./src/miner/mineBin/mine ./dist/",
+		"copy-mineBin-win": "copyfiles -u 0 ./src/miner/mineBin/mineWin32.exe ./dist/",
+		"createPackage": "node ./buildTool/createPackageJson.js ./package.json ./dist/package.json && cd dist && npm i && cd ..",
+		"caxa": "npm run build-tsc && npm run createPackage && npm run copy-mineBin && caxa -i ./dist -o ./bin/app  -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\"",
+		"caxa-win": "npm run build-tsc && npm run createPackage && npm run copy-mineBin-win && caxa -i ./dist -o ./bin/app.exe  -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\""
+	},
+	"author": "",
+	"license": "ISC",
+	"gypfile": true,
+	"devDependencies": {
+		"@types/node": "^17.0.5",
+		"caxa": "2.1.0",
+		"copyfiles": "2.4.1",
+		"rimraf": "3.0.2",
+		"ts-node": "10.5.0",
+		"tslint": "6.1.3",
+		"typescript": "^4.5.5"
+	},
+	"dependencies": {
+		"ajv": "8.6.2",
+		"ajv-keywords": "5.0.0",
+		"bs58": "4.0.1",
+		"bson": "4.2.3",
+		"commander": "9.0.0",
+		"json-colorizer": "2.2.2",
+		"lmdb": "2.1.6",
+		"node-addon-api": "4.2.0",
+		"secp256k1": "4.0.2",
+		"segfault-handler": "1.3.0"
+	}
+}
