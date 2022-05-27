@@ -24,6 +24,7 @@ const SocketTimeout = Param.network.SocketTimeout || 30000;
 const AliveAddr = Param.limitTime.AliveAddr || 3600000;
 const FillConnect = Param.limitTime.FillConnect || 60000;
 const HeartbeatTime = Param.limitTime.Heartbeat || 60000;
+const Version = Param.common.Version || 0;
 export default class P2P {
 	readonly #network: interfaceNetwork;
 	readonly #task: Task;
@@ -34,7 +35,6 @@ export default class P2P {
 	#addrTable: AddrTable;
 	#lastBlock: { height: number, hash: Buffer };
 	#connectedIp: interfaceConnectionObject;
-	// #connectCache: { [key: string]: number };
 	#connectCache: interfaceConnectionObject;
 	#server?: net.Server;
 	readonly #maxConnectAmount: number;
@@ -223,11 +223,17 @@ export default class P2P {
 		 */
 		P2PMessage.eventOn('peerConnected', async (peer: Peer, addrSource) => {
 			let ipPortStr = peer.ipPortStr;
+			let uid = addrSource.uid;
 			if (this.#connectCache[ipPortStr]) {
 				this.#connectCache[ipPortStr] = undefined;
 			}
 			this.#addrTable.connectTimeout(ipPortStr, false);
-			if (this.length > this.#maxConnectAmount) {
+
+			if(this.uid.toString('hex') === uid){
+				// myself
+				return peer.disconnect(true);
+			}
+			else if (this.length > this.#maxConnectAmount) {
 				let addrs = this.getAliveAddr();
 				let disconnectPeer = peer;
 				if (!peer.isPassiveConnect) {
@@ -243,7 +249,6 @@ export default class P2P {
 				return;
 			}
 			else {
-				let uid = addrSource.uid;
 				let ipStatus = await this.#addrTable.checkIpStatus(peer.ip);
 				if (this.#connectedIp[uid]) {
 					let isAlive = await this.#connectedIp[uid].checkPeerAlive();
@@ -368,7 +373,6 @@ export default class P2P {
 				return;
 			}
 			this.#syncBlockQueue.push({
-				// ipPort: peer.ipPortStr,
 				uid: peer.yourUid,
 				data
 			});
@@ -380,11 +384,11 @@ export default class P2P {
 		/**
 		 * Block synchronization completed.
 		 */
-		P2PMessage.eventOn('peerBlockSyncFinish', async (peer: Peer, err: boolean) => {
+		P2PMessage.eventOn('peerBlockSyncFinish', async (peer: Peer, err: boolean | { hash: Buffer }, isFork: boolean) => {
 			this.#syncBlockQueue = [];
 			await this.#updateLastHeight();
 			let getblocksData = await BlockUtils.getblocksData(this.#task, this.#lastBlock.height);
-			this.#unlockPeerSyncBlock(getblocksData);
+			this.#unlockPeerSyncBlock(getblocksData, isFork);
 		});
 	}
 
@@ -445,14 +449,12 @@ export default class P2P {
 			randomInt(length, length * 3, (err, n) => {
 				let tokenIndex = 0;
 				if (!err) tokenIndex = n % length;
-				// let tokenIpPort = this.#syncBlockQueue[tokenIndex].ipPort;
 				let tokenUid = this.#syncBlockQueue[tokenIndex].uid;
 				let tokenPeer = this.#connectedIp[tokenUid];
 				if (!tokenPeer) {
 					let i = 0;
 					for (; i < length; i++) {
 						tokenIndex = i;
-						// tokenIpPort = this.#syncBlockQueue[tokenIndex].ipPort;
 						tokenUid = this.#syncBlockQueue[tokenIndex].uid;
 						tokenPeer = this.#connectedIp[tokenUid];
 						if (tokenPeer && tokenPeer.networkStatus.socketStatus !== -1) {
@@ -477,14 +479,14 @@ export default class P2P {
 		}, Math.min(syncAmount * 100, 1000));
 	}
 
-	#unlockPeerSyncBlock(lastGetblocksData?: Buffer[]) {
+	#unlockPeerSyncBlock(lastGetblocksData?: Buffer[], isFork?: boolean) {
 		this.#flagBlockInSync = false;
 		let lastBlock = this.#lastBlock;
 		this.#map((peer: Peer) => {
 			peer.lastBlock = lastBlock;
 			peer.unlockSyncBlock();
 			if (lastGetblocksData) {
-				peer.resyncAfterNewBlock(lastGetblocksData);
+				peer.resyncAfterNewBlock(lastGetblocksData, isFork);
 			}
 		});
 	}
@@ -651,6 +653,10 @@ export default class P2P {
 
 	getConnections(): number {
 		return this.length;
+	}
+
+	getVersion(): number {
+		return Version;
 	}
 
 	async addPeer(ip: string, port?: number): Promise<boolean> {

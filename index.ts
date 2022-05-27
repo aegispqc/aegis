@@ -13,7 +13,7 @@ const defultWalletConfigPath = path.join(process.cwd(), './wconfig.json');
 const SegfaultHandler = require('segfault-handler');
 SegfaultHandler.registerHandler('crash.log');
 
-console.log('Program is activated');
+console.log(`Program is activated. Node: ${process.version}`);
 
 async function getConfig(path?: string, isNode: boolean = true) {
 	let config;

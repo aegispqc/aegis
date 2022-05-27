@@ -608,60 +608,68 @@ Arguments:
 The block transaction in raw format.
 `
 	},
-	addPeer: {
-		simple: `addPeer [ peer: string ]`,
-		detail: `addPeer
+	p2pAddPeer: {
+		simple: `p2pAddPeer [ ip: string ] [ port?: number ]`,
+		detail: `p2pAddPeer
 Add a new connectable node.
 Try to connect to the new node before joining and add to the connection table if you can connect.
 
 Arguments:
-1. peer (type string, required)  
-Input ip and port. format: "[ip]:[port]"
+1. ip (type string, required)  
+Input ip. 
+
+2. ip (type number, optional)    
+Input port.
+  
 `
 	},
-	deletePeer: {
-		simple: `deletePeer [ peer: string ]`,
-		detail: `deletePeer
+	p2pDeletePeer: {
+		simple: `p2pDeletePeer [ ip: string ] [ port?: number ]`,
+		detail: `p2pDeletePeer
 Delete connectable nodes. Delete the specified node in the connection table.
 
 Arguments:
-1. peer (type string, required)  
-Input ip and port. format: "[ip]:[port]"
+1. ip (type string, required)  
+Input ip. 
+
+2. ip (type number, optional)    
+Input port.
+  
 `
 	},
-	addBlackPeer: {
-		simple: `addBlackPeer [ peer: string ]`,
-		detail: `addBlackPeer
+	p2pAddBlackPeer: {
+		simple: `p2pAddBlackPeer [ ip: string ]`,
+		detail: `p2pAddBlackPeer
 Add a new list of blacklistable connections. Disable specified ip connection.
 
-1. peer (type string, required)  
+1. ip (type string, required)  
 ip address.
 `
 	},
-	deleteBlackPeer: {
-		simple: `deleteBlackPeer [ peer: string ]`,
-		detail: `deleteBlackPeer
+	p2pDeleteBlackPeer: {
+		simple: `p2pDeleteBlackPeer [ ip: string ]`,
+		detail: `p2pDeleteBlackPeer
 Delete connectable blacklist.
 
-1. peer (type string, required)  
+1. ip (type string, required)  
 ip address.
 `
 	},
-	peerStatus: {
-		simple: `peerStatus`,
-		detail: `peerStatus
+	p2pStatus: {
+		simple: `p2pStatus`,
+		detail: `p2pStatus
 List the status of nodes that are currently connected.
 `
 	},
-	peerList: {
-		simple: `peerList`,
-		detail: `peerList
+	p2pGetPeerList: {
+		simple: `p2pGetPeerList`,
+		detail: `p2pGetPeerList
 List connectable nodes.
 `
 	},
-	blackList: {
-		simple: `blackList`,
-		detail: `blackList
+	p2pGetBlackList: {
+		simple: `p2pGetBlackList`,
+		detail: `p2pGetBlackList
 List all banned ip address.
 `
 	},

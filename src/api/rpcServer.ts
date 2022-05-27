@@ -14,7 +14,7 @@ import {
 	getTransactionByTxidValidate,
 	getPqcertByHashValidate,
 	newBlockValidate,
-	newBlockOnlyTxisValidate,
+	newBlockOnlyTxidsValidate,
 	createNewTransationValidate,
 	mineValidate,
 	getCacheTxByHashValidate,
@@ -215,7 +215,7 @@ class RpcServer {
 		addTx: this.addTx,
 		mine: this.mine,
 		getMiningBlock: this.getMiningBlock,
-		newBlockOnlyTxis: this.newBlockOnlyTxis,
+		newBlockOnlyTxids: this.newBlockOnlyTxids,
 		getDifficulty: this.getDifficulty,
 		getTxPoolList: this.getTxPoolList,
 		getTxPoolByTxid: this.getTxPoolByTxid,
@@ -631,12 +631,12 @@ class RpcServer {
 	 * @param {string[]} block.txids Transactions in the block.(raw format)
 	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async newBlockOnlyTxis(block: { hash: string, header: string, coinbaseRaw: string }): Promise<rpcReturn> {
-		if (!newBlockOnlyTxisValidate({ block })) {
-			console.error(newBlockOnlyTxisValidate.errors);
-			return { error: newBlockOnlyTxisValidate.errors[0].message };
+	async newBlockOnlyTxids(block: { hash: string, header: string, coinbaseRaw: string }): Promise<rpcReturn> {
+		if (!newBlockOnlyTxidsValidate({ block })) {
+			console.error(newBlockOnlyTxidsValidate.errors);
+			return { error: newBlockOnlyTxidsValidate.errors[0].message };
 		}
-		let r = await this.task.newBlockOnlyTxis(block);
+		let r = await this.task.newBlockOnlyTxids(block);
 		if (r.err) {
 			return { error: r.err };
 		}
@@ -681,6 +681,7 @@ class RpcServer {
 		let r = await this.task.getStatus();
 		if (this.p2p) {
 			r.connections = this.p2p.getConnections();
+			r.version = this.p2p.getVersion();
 		}
 		return { result: r };
 	}

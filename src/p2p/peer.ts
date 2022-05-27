@@ -50,8 +50,10 @@ class Peer {
 	lastGetAddrTime: number;
 	#myLastHeight: number;
 	#myLastHash: Buffer;
+	#yourVersion: number;
 	#yourLastHeight: number;
 	#blockSentHeight: number;
+	#resendBlock: number;
 	#isMalicious: boolean;
 	#isConnectTimeout: boolean;
 	#flagIsDisconnect: boolean;
@@ -95,9 +97,12 @@ class Peer {
 			this.#myLastHeight = setting.lastBlock.height ? setting.lastBlock.height : 0;
 			this.#myLastHash = setting.lastBlock.hash ? setting.lastBlock.hash : Buffer.alloc(0);
 		}
+		this.#yourVersion = 0;
 		this.#yourLastHeight = 0;
 		// last sent block height
 		this.#blockSentHeight = 0;
+		// resend the same block
+		this.#resendBlock = 0;
 
 		// sync block data queue
 		this.#blockDataQueue;
@@ -191,6 +196,7 @@ class Peer {
 			ip: this.ip,
 			port: this.port,
 			height: this.#yourLastHeight,
+			version: this.#yourVersion,
 			networkStatus: this.networkStatus,
 			isRelayPeer: this.isRelayPeer,
 			blockInSync: this.#flagBlockInSync,
@@ -374,6 +380,7 @@ class Peer {
 			}
 		}
 		this.yourUid = versionData.uid;
+		this.#yourVersion = versionData.version;
 		this.#emitEvent('peerConnected', {
 			uid: versionData.uid,
 			ip: this.ip,
@@ -428,9 +435,9 @@ class Peer {
 		this.#flagForkReady = false;
 	}
 
-	async #blockSyncFinish(err: boolean | { hash: Buffer }) {
+	async #blockSyncFinish(err: boolean | { hash: Buffer }, isFork?: boolean) {
 		this.#resetSyncBlockData();
-		this.#emitEvent('peerBlockSyncFinish', err);
+		this.#emitEvent('peerBlockSyncFinish', err, isFork);
 		if (err) {
 			if (typeof err === 'object'
 				&& Buffer.isBuffer(err.hash)) {
@@ -453,10 +460,29 @@ class Peer {
 	async #getblocksProcess(verifiedHeight: number) {
 		clearTimeout(this.#connectTimeout);
 		if (this.#blockSentHeight > verifiedHeight) {
+			if (this.#resendBlock++ > 10) {
+				return this.disconnect(true);
+			}
 			this.#blockSentHeight = verifiedHeight;
 		}
+		else {
+			this.#resendBlock = 0;
+		}
+
 		let verifiedBlock = await this.#task.getBlockDataByHeight(verifiedHeight);
 		if (!verifiedBlock) return;
+		if (this.#verifiedBlockHeight !== 0
+			&& this.#verifiedBlockHeight > verifiedHeight
+			&& this.#yourLastHeight >= this.#myLastHeight) {
+			let getblocksData = await BlockUtils.getblocksData(this.#task, Math.min(this.#myLastHeight, this.#yourLastHeight));
+			this._getblocks(getblocksData);
+			this.#verifiedBlockHash = verifiedBlock.hash;
+			this.#verifiedBlockHeight = verifiedHeight;
+			if (verifiedHeight > this.#yourLastHeight) {
+				this.#yourLastHeight = verifiedHeight;
+			}
+			return;
+		}
 		this.#verifiedBlockHash = verifiedBlock.hash;
 		this.#verifiedBlockHeight = verifiedHeight;
 		if (verifiedHeight > this.#yourLastHeight) {
@@ -564,7 +590,7 @@ class Peer {
 								await this.#task.newBlock(this.#afterForkDataQueue[i]);
 							}
 						}
-						this.#blockSyncFinish(false);
+						this.#blockSyncFinish(false, true);
 					}
 					else {
 						this._reject('blockForkFail', {});
@@ -576,6 +602,7 @@ class Peer {
 			)
 		}
 		else if (blocksData.length > 1) {
+			console.log(`sync blocks from ${this.#myLastHeight + 1} to ${this.#myLastHeight + blocksData.length}`);
 			this.#blockDataQueue = this.#task.newAddBlockTask(
 				blocksData.length,
 				this.#blockSyncFinish.bind(this)
@@ -679,7 +706,6 @@ class Peer {
 		}
 		let blocks = getdata.block;
 		if (Array.isArray(blocks) && blocks.length > 0) {
-			// this.#resetSyncBlockData();
 			for (let i = 0; i < blocks.length; i++) {
 				this._block(blocks[i]);
 			}
@@ -700,9 +726,15 @@ class Peer {
 		}
 	}
 
-	async resyncAfterNewBlock(getblocksData: Buffer[]) {
+	async resyncAfterNewBlock(getblocksData: Buffer[], isFork?: boolean) {
 		if (this.#myLastHeight > this.#yourLastHeight) {
-			await this.#sendBlockInv(this.#verifiedBlockHeight + 1, this.#myLastHeight);
+			if (isFork) {
+				let blocksData = await BlockUtils.getblocksData(this.#task, this.#yourLastHeight);
+				this._getblocks(blocksData);
+			}
+			else {
+				await this.#sendBlockInv(this.#verifiedBlockHeight + 1, this.#myLastHeight);
+			}
 		}
 		else {
 			this._getblocks(getblocksData);

@@ -379,13 +379,11 @@ class Task {
 		let backFun = async (blockData: BlockData): Promise<boolean> => {
 			let r = await this.newBlock(blockData);
 			if (r.err) {
-				backFun = null;
 				finishFun({
 					hash: blockData.blockHeader.getHash()
 				});
 				return false;
 			}
-
 			return true;
 		};
 
@@ -399,6 +397,7 @@ class Task {
 	 * @returns Whether to complete.
 	 */
 	async forkBlock(preHash: Buffer, blocks: BlockData[]) {
+		console.log('forkBlock start: ', preHash.toString('hex'));
 		let tk = await this.taskQueue.addTask(async () => {
 			let forkLastBlock = this.getBlockDataByHash(preHash);
 			if (!forkLastBlock) {
@@ -408,10 +407,10 @@ class Task {
 			let startHeight = forkLastBlock.height + 1;
 			let endHeight = startHeight + blocks.length;
 			let lastBlock = this.getLastBlock();
-			console.log(startHeight, endHeight, lastBlock);
 			if (!lastBlock) {
 				return false;
 			}
+			console.log(`forkBlock: start height: ${startHeight} endHeight: ${endHeight} thisHeight: ${lastBlock.height}`);
 
 			if (lastBlock.height >= endHeight) {
 				return false;
@@ -482,6 +481,7 @@ class Task {
 		});
 
 		if (tk.taskErr || !tk.data) {
+			console.error('forkBlock fail: ');
 			return false;
 		}
 
@@ -631,7 +631,7 @@ class Task {
 	 * @param {string} block.coinbaseRaw Transactions in the block.(raw format)
 	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async newBlockOnlyTxis(block: { hash: string, header: string, coinbaseRaw: string }): Promise<{ data?: any, err?: string }> {
+	async newBlockOnlyTxids(block: { hash: string, header: string, coinbaseRaw: string }): Promise<{ data?: any, err?: string }> {
 		let blockHeader = new BlockHeader(Buffer.from(block.header, 'hex'), true);
 		let realHash = blockHeader.getHash('hex');
 		if (block.hash !== realHash) {
@@ -792,6 +792,7 @@ class Task {
 		let r = {
 			time: Date.now(),
 			connections: 0,
+			version: 0,
 			nowHeight: this.core.nowHeight,
 			difficulty: this.core.getDifficulty(),
 			mining: this.mc.minerRunFlag,

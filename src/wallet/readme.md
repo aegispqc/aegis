@@ -126,11 +126,8 @@
         Exapmle:
         Create an address with 3 pqcert.
         > walletAddAddress 3
-        f61882376d9bc9548a48439c346dc1e4445f25d82a3b8d2c729685ab555a2d4a
-
-
-        Create an address with 3 pqcert hash,  level = 2, fake amount = 1 and do shuffle.
-        > walletAddAddress [8c6ea2c71c5b8448cb5601833d84b2925569568f66abddc1aa27aff1a4497fd9, bd591ed280a38bf193330e037d4c87d5315155035e47777c0e54a88ed9ff93c5, 89ded02aa842c7c08618c96e02d0193ac4414c997131aeef7c453754cd217d1f] 2 1 true
+        [new address]
+		
 
 
 **walletGetAddressList**: #Get all addresses for the wallet.

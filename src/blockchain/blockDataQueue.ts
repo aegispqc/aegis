@@ -83,18 +83,17 @@ class BlockDataQueue {
 		while (this.blockList[this.runIndex] && !this.stopFlag) {
 			let hash = this.blockList[this.runIndex].blockHeader.getHash('hex');
 			let r = await this.backFun(this.blockList[this.runIndex]);
-			delete this.blockHash[hash];
-			delete this.blockList[this.runIndex];
-			this.runIndex++;
 			if (!r) {
 				this.stop();
 				return false;
 			}
+			delete this.blockHash[hash];
+			delete this.blockList[this.runIndex];
+			this.runIndex++;
 		}
 		this.runFlag = false;
 
-		if (typeof this.finishFun === 'function'
-			&& this.isFinish()) {
+		if (typeof this.finishFun === 'function' && this.isFinish()) {
 			this.finishFun(false);
 		}
 	}

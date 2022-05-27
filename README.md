@@ -3,6 +3,7 @@ AEGIS is a brand-new, experimental quantum-resistant cryptocurrency that concept
 
 ## What is AEGIS Core?
 Aegis Core is programmed to decide which blockchain contains valid transactions with multiple post-quantum signature algorithms.  
+  
 The current digital signature algorithms used by AEGIS are as follows:
 
 1. **Secp256k1**
@@ -22,6 +23,7 @@ windows
 ./app.exe
 ```
 #### Setting full node config
+Execute the full node for the first time, it will ask for configuration parameters.
 ```bash
 coreOpt.dbDir: .\data\blockDb
 coreOpt.minerFeeRatio: 1
@@ -53,6 +55,7 @@ windows
 ./index.exe wallet
 ```
 #### setting wallet config
+Enter the individual needs in order.
 ```bash
 rpcOpt.hostname: 127.0.0.1
 rpcOpt.port: 51978
@@ -66,7 +69,7 @@ bigIntObjFloatFlag: true
 ```
 **PS. wallet config will save in wconfig.json**
 
-## Wallet usage
+## AEGIS Wallet - Get started using AEGIS
 #### Start walletCli
 linux
 ```bash
@@ -103,4 +106,3 @@ or use help method.
 ```bash
 > help
 > help [method name]
-```

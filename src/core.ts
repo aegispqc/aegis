@@ -227,7 +227,7 @@ class Core {
 		let preHash = blockData.blockHeader.rawPrehash;
 		let preBlock = this.blockchainDb.getBlockDataByHash(preHash);
 		if (!preBlock) {
-			console.error(`New block is fail !!! Reason: preBlock`);
+			console.error(`New block is fail !!! preBlock (${preHash.toString('hex')}) is not found`);
 			return false;
 		}
 

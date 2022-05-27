@@ -72,7 +72,7 @@ const newBlockSchema = {
 	required: ['block']
 }
 
-const newBlockOnlyTxisSchema = {
+const newBlockOnlyTxidsSchema = {
 	type: 'object',
 	properties: {
 		block: {
@@ -236,7 +236,7 @@ const getTxPoolValidate = ajv.compile(getTxPoolSchema);
 const walletAddWatchAddressValidate = ajv.compile(walletAddWatchAddressSchema);
 const walletGetTxListValidate = ajv.compile(walletGetTxListSchema);
 const peerValidate = ajv.compile(peerSchema);
-const newBlockOnlyTxisValidate = ajv.compile(newBlockOnlyTxisSchema);
+const newBlockOnlyTxidsValidate = ajv.compile(newBlockOnlyTxidsSchema);
 
 
 
@@ -257,7 +257,7 @@ export {
 	walletAddWatchAddressValidate,
 	walletGetTxListValidate,
 	peerValidate,
-	newBlockOnlyTxisValidate,
+	newBlockOnlyTxidsValidate,
 	
 }
 
