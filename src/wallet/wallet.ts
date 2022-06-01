@@ -8,7 +8,6 @@ import { WalletDb, addressOpt } from './walletDb';
 import { serialize } from 'bson';
 import { genWallet, recoveryKey } from './genWallet';
 import { SafePasswordBuf } from '../crypto/safePassword';
-import { OpReturn } from '../blockchain/blockTx';
 
 type recoverySeed = {
 	keySeed: Buffer;
@@ -21,30 +20,9 @@ type recoverySeed = {
 	label?: string;
 }
 
-type keypairRaw = {
-	version: number;
-	signType: number;
-	privateKey: Buffer;
-	publicKey: Buffer;
-	hash: Buffer;
-}
-
 type sign = {
 	order: number;
 	sign: Buffer;
-}
-
-type backJson = {
-	seed: { 
-		
-		seed: Buffer;
-		keyTypes: { 
-
-			version: number;
-			signType: number;
-		}[];
-	};
-	addrs: addressOpt[];
 }
 
 function shuffle(arr: any[]) {

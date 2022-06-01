@@ -83,10 +83,16 @@ export class BufferQueue {
 		}
 
 		let parsedData = await this.#checkCb(data);
-		if (typeof parsedData === 'number' && parsedData > -1) {
-			this.#waitData = true;
-			if (this.#queue.length <= 1) {
-				return this.stop();
+		if (typeof parsedData === 'number') {
+			if(parsedData > -1){
+				this.#waitData = true;
+				if (this.#queue.length <= 1) {
+					return this.stop();
+				}
+			}
+			else{
+				this.#queue.shift();
+				return this.#process();
 			}
 		}
 		else if (parsedData && typeof parsedData === 'object') {
@@ -97,6 +103,11 @@ export class BufferQueue {
 				this.#addRemain(parsedData.remain);
 			}
 		}
+		else{
+			this.#queue.shift();
+			return this.#process();
+		}
+
 		if (this.#isRun) {
 			this.#process();
 		}

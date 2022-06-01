@@ -77,12 +77,17 @@ class WalletDb {
 		this.dbDir = dbDir;
 		this.dbRoot = lmdb.open({
 			path: this.dbDir,
-			name: 'wallet'
+			name: 'wallet',
+			maxReaders: 1
 		});
 
 		this.keyPairDb = this.dbRoot.openDB({ name: `wallet_keypair`, keyIsUint32: true });
 		this.addressDb = this.dbRoot.openDB({ name: `wallet_address`, keyIsBuffer: true });
 		this.taskQueue = new TaskQueue(100);
+
+		//------- Try to read the database -------
+		let keyPairList = this.getKeyPairList()
+		console.log('key pair list: ', (keyPairList) ? keyPairList.map(x => x.id) : []);
 	}
 
 	keypairIsExist(wid: number): boolean {
@@ -95,15 +100,15 @@ class WalletDb {
 			if (this.keypairIsExist(thisId)) {
 				return false;
 			}
-
+			
 			for (let i = 0; i < data.keypairs.length; i++) {
 				let pqcertPubKeyJson: PQCertPubKeyJsonData = {
 					version: data.keypairs[i].version,
 					pqcertType: 1,
 					signType: data.keypairs[i].signType,
 					pubKey: data.keypairs[i].publicKey.toString('hex')
-				}
-
+				};
+				
 				let pqcertPubKey = creatPQCertPubKey(pqcertPubKeyJson);
 				if (!pqcertPubKey) {
 					return false;
@@ -114,7 +119,7 @@ class WalletDb {
 				}
 				data.keypairs[i].hash = hash;
 			}
-
+			
 
 			let suc = await this.keyPairDb.put(thisId, data);
 			if (suc) {
@@ -122,7 +127,7 @@ class WalletDb {
 			}
 			return false;
 		});
-
+		
 		if (r.taskErr) {
 			return false;
 		}

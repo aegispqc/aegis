@@ -132,9 +132,22 @@ export default class P2P {
 
 	async #Heartbeat() {
 		while (this.#flagPolling) {
+			let nowDate = Date.now();
 			for (let i in this.#connectedIp) {
-				if (!this.#connectedIp[i]) continue;
-				this.#connectedIp[i].sendMessage('ping');
+				if (!this.#connectedIp[i]) {
+					delete this.#connectedIp[i];
+					continue;
+				}
+				let netStatus = this.#connectedIp[i].status.networkStatus;
+				if (netStatus.socketStatus < 0) {
+					delete this.#connectedIp[i];
+				}
+				else if (nowDate > netStatus.time.lastComm + AliveAddr) {
+					this.#connectedIp[i].disconnect(true);
+				}
+				else {
+					this.#connectedIp[i].sendMessage('ping');
+				}
 				await delay(50);
 			}
 			await delay(HeartbeatTime);
@@ -229,7 +242,7 @@ export default class P2P {
 			}
 			this.#addrTable.connectTimeout(ipPortStr, false);
 
-			if(this.uid.toString('hex') === uid){
+			if (this.uid.toString('hex') === uid) {
 				// myself
 				return peer.disconnect(true);
 			}

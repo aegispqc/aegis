@@ -94,7 +94,9 @@ class WalletCli {
 	wallet?: Wallet;
 	private _txTemp?: BlockTx;
 
-	constructor(rpcOpt?: rpcOpt, walletDataPath: string = path.join(process.cwd(), './walletFile'), opt?: { jsonSpace?: boolean, jsonColor?: boolean, addressBs58ck?: boolean, bigIntObjFloatFlag?: boolean }) {
+	constructor(rpcOpt?: rpcOpt, walletDataPath: string = path.join(process.cwd(), './walletFile'), 
+	opt?: { jsonSpace?: boolean, jsonColor?: boolean, addressBs58ck?: boolean, bigIntObjFloatFlag?: boolean },
+	rpcOnly: boolean = false ) {
 		this.rpcOpt = rpcOpt;
 		this.walletDataPath = walletDataPath;
 		this.sendId = 0;
@@ -106,7 +108,31 @@ class WalletCli {
 		this.methodParamsType = (this.bigIntObjFloatFlag)? methodParamsTypeBigIntFloat : methodParamsType;
 		this.rl = readline.createInterface(stdin, stdout, completer);
 		this.postRequest = new PostRequest(rpcOpt);
-		this.wallet = new Wallet(walletDataPath);
+		if(!rpcOnly) {
+			this.wallet = new Wallet(walletDataPath);
+		}
+		else {
+			console.log('rpcOnly Mode');
+			let rpcOnlyError = { error: 'rpcOnly flag = true, disable wallet mode' };
+			this.cliMethod.generateWallet = async () => rpcOnlyError;
+			this.cliMethod.importWalletFile = async () => rpcOnlyError;
+			this.cliMethod.exportWalletFile = () => rpcOnlyError;
+			this.cliMethod.walletGetSignSysList = () => rpcOnlyError;
+			this.cliMethod.walletAddAddress = async () => rpcOnlyError;
+			this.cliMethod.walletGetAddressList = () => rpcOnlyError;
+			this.cliMethod.walletGetAddressDetails = () => rpcOnlyError;
+			this.cliMethod.walletGetBalance = async () => rpcOnlyError;
+			this.cliMethod.walletCreateNewTransation = async () => rpcOnlyError;
+			this.cliMethod.walletSend = async () => rpcOnlyError;
+			this.cliMethod.walletGetTxList = async () => rpcOnlyError;
+			this.cliMethod.walletGetUTXOList = async () => rpcOnlyError;
+			this.cliMethod.walletAutoWatch = async () => rpcOnlyError;
+			this.cliMethod.switchWallet = () => rpcOnlyError;
+			this.cliMethod.txAddPqcertRoot = () => rpcOnlyError;
+			this.cliMethod.txAddPqcertPubKey = () => rpcOnlyError;
+			this.cliMethod.checkSignPqcert = async () => rpcOnlyError;
+			this.cliMethod.signTx = async () => rpcOnlyError;
+		}
 	}
 
 	async init() {
@@ -440,10 +466,6 @@ class WalletCli {
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
 	exportWalletFile(path: string = requiredArg('path'), exportAllFlag: boolean = false): cliReturn {
-		if (!this.wallet) {
-			return { error: 'ERROR: wallet is not found' };
-		}
-
 		let fname = `${path}_${Date.now()}.wallet`;
 		let exportJson;
 		if (exportAllFlag) {
@@ -495,9 +517,6 @@ class WalletCli {
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
 	async walletAddAddress(): Promise<cliReturn> {
-		if (!this.wallet) {
-			return { error: 'wallet is not found' };
-		}
 		let r: string | false;
 		let kps = this.wallet.getKeyPair();
 		if (!kps) {
@@ -652,10 +671,6 @@ class WalletCli {
 			address = bs58.toString('hex');
 		}
 
-		if (!this.wallet) {
-			return { error: 'ERROR: wallet is not found' };
-		}
-
 		if (origin) {
 			let result = this.wallet.getAddress(address);
 			if (!result) {
@@ -735,10 +750,6 @@ class WalletCli {
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
 	async walletGetBalance(): Promise<cliReturn> {
-		if (!this.wallet) {
-			return { error: 'ERROR: wallet is not found' };
-		}
-
 		let addrList: any = this.wallet.getAddressesList();
 
 		let r = await this.post({
@@ -1299,10 +1310,6 @@ class WalletCli {
 			return { error: 'ERROR: Input formatting error' };
 		}
 
-		if (!this.wallet) {
-			return { error: 'ERROR: wallet is not found' };
-		}
-
 		let blockTx = (txRaw) ? BlockTx.serializeToClass(Buffer.from(txRaw, 'hex')) : this.txTemp;
 		if (!blockTx) {
 			return { error: 'ERROR: blockTx error' };
@@ -1522,14 +1529,18 @@ class WalletCli {
 	async exit(noQuestion?: boolean) {
 		if(noQuestion) {
 			this.rl.pause();
-			await this.wallet.exit();
+			if(this.wallet) {
+				await this.wallet.exit();
+			}
 			process.exit();
 		}
 		else {
 			let ans = await rlQuestion(this.rl, 'Sure you want to exit? (y/n): ');
 			if (ans.match(/^y(es)?$/i)) {
 				this.rl.pause();
-				await this.wallet.exit();
+				if(this.wallet) {
+					await this.wallet.exit();
+				}
 				process.exit();
 			}
 			else{
@@ -1644,7 +1655,9 @@ class WalletCli {
 		if (obj.error) {
 			return { err: `ERROR:${obj.error}`}
 		}
-		obj.result['nowWalletID'] = this.wallet.getNowWid();
+		if(this.wallet) {
+			obj.result['nowWalletID'] = this.wallet.getNowWid();
+		}
 		return obj;
 	}
 

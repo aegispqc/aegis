@@ -99,7 +99,8 @@ class WalletHistoryDb {
 		this.dbRoot = lmdb.open({
 			path: this.dbDir,
 			name: 'wallet',
-			maxDbs: 200
+			maxDbs: 12,
+			maxReaders: 1
 		});
 
 		this.optionDb = this.dbRoot.openDB({ name: 'option' });

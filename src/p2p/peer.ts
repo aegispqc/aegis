@@ -439,8 +439,7 @@ class Peer {
 		this.#resetSyncBlockData();
 		this.#emitEvent('peerBlockSyncFinish', err, isFork);
 		if (err) {
-			if (typeof err === 'object'
-				&& Buffer.isBuffer(err.hash)) {
+			if (typeof err === 'object' && Buffer.isBuffer(err.hash)) {
 				this._reject('blockInvalid', {
 					data: err.hash
 				});
@@ -553,6 +552,7 @@ class Peer {
 
 	#setBlockSyncTimeout() {
 		this.#blockSyncTimeout = setTimeout(() => {
+			console.log('sync block timeout');
 			if (this.#blockDataQueue) {
 				this.#blockDataQueue.stop();
 				this.#blockDataQueue = undefined;
@@ -572,6 +572,7 @@ class Peer {
 		if (this.#myLastHeight > this.#verifiedBlockHeight
 			&& blocksData.length + knownLastHeight > this.#myLastHeight) {
 			this.#flagForkReady = true;
+			console.log(`fork from ${this.#verifiedBlockHeight + 1} to ${this.#verifiedBlockHeight + blocksData.length}`);
 			this.#blockDataQueue = new BlockDataQueue(
 				blocksData.length,
 				async (blockData) => {
@@ -594,7 +595,7 @@ class Peer {
 					}
 					else {
 						this._reject('blockForkFail', {});
-						this.#blockSyncFinish(true);
+						this.#blockSyncFinish(true, true);
 					}
 					this.#waitForkDataQueue = [];
 					return true;
@@ -615,13 +616,10 @@ class Peer {
 
 	async #blockProcess(block) {
 		let blockHash = block.hash;
-		if (this.#flagBlockInSync) {
-			clearTimeout(this.#blockSyncTimeout);
-			this.#setBlockSyncTimeout();
-		}
-		else {
-			return;
-		}
+		if (!this.#flagBlockInSync) return;
+		clearTimeout(this.#blockSyncTimeout);
+		this.#setBlockSyncTimeout();
+
 		let blockData = new BlockData(new BlockHeader(block.header));
 		for (let i = 0; i < block.txs.length; i++) {
 			let txItem = BlockTx.serializeToClass(block.txs[i]);

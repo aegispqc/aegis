@@ -88,10 +88,14 @@ class P2pStatusDb {
 		this.parole = parole;
 		this.dbRoot = lmdb.open({
 			path: this.dbDir,
-			name: 'p2p_status'
+			name: 'p2p_status',
+			maxReaders: 1
 		});
 		this.blacklistDb = this.dbRoot.openDB({ name: `blacklist`, keyIsBuffer: true });
 		this.peerDb = this.dbRoot.openDB({ name: `peerlist`, keyIsBuffer: true });
+
+		//------- Try to read the database -------
+		console.log('p2p peer list', this.getPeerList());
 	}
 
 	/**

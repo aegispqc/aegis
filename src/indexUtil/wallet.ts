@@ -30,7 +30,7 @@ async function exitHandler(walletCli) {
 	}
 }
 
-function init(config) {
+function init(config, rpcOnly = false) {
 	let v = walletConfigValidate(config);
 	if (!v) {
 		console.error(walletConfigValidate.errors);
@@ -43,7 +43,7 @@ function init(config) {
 		}
 	}
 
-	let walletCli = new WalletCli(config.rpcOpt, config.walletDataPath, { jsonSpace: config.jsonSpace, jsonColor: config.jsonColor, addressBs58ck: config.addressBs58ck });
+	let walletCli = new WalletCli(config.rpcOpt, config.walletDataPath, { jsonSpace: config.jsonSpace, jsonColor: config.jsonColor, addressBs58ck: config.addressBs58ck }, rpcOnly);
 
 	walletCli.init();
 

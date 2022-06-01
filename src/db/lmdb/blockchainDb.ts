@@ -45,13 +45,15 @@ class BlockchainDb {
 		this.dbRoot = lmdb.open({
 			path: dbPath,
 			name: 'blockchain',
-			maxDbs: 10
+			maxDbs: 10,
+			maxReaders: 1
 		});
 		/** Covered db */
 		this.coveredDb = lmdb.open({
 			path: `${dbPath}/covered`,
 			name: 'covered',
-			maxDbs: 2
+			maxDbs: 2,
+			maxReaders: 1
 		});
 		/** Block db */
 		this.blockDb = this.dbRoot.openDB({ name: 'block_data', keyIsBuffer: true });
@@ -59,6 +61,9 @@ class BlockchainDb {
 		this.statusDb = this.dbRoot.openDB({ name: 'block_status' });
 		/** Index db */
 		this.indexDb = new IndexDb(this.dbRoot);
+
+		//------- Try to read the database -------
+		console.log('last-blockhash', (this.statusDb.get('last-blockhash'))?.toString('hex'));
 	}
 
 	/**
@@ -319,7 +324,6 @@ class BlockchainDb {
 						return false;
 					}
 				}
-				return false;
 			}
 		}
 
