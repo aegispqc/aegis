@@ -3,8 +3,8 @@ import pingMessage from './ping';
 
 /**
  * ping's payload
- * Size	 Description  Data type  Comments
- * 8	 nonce		uint64_t   random nonce
+ * Size		Description		Data type	Comments
+ * 8		nonce			uint64_t	random nonce
  */
 
 export default class Pong extends pingMessage {

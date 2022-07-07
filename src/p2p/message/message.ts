@@ -15,6 +15,7 @@ const MaxErrorCount = Param.network.MaxErrorCount || 10;
 
 import commandAddr from './command/addr';
 import commandBlock from './command/block';
+import commandBlockAck from './command/blockack';
 import commandGetAddr from './command/getaddr';
 import commandGetBlocks from './command/getblocks';
 import commandGetData from './command/getdata';
@@ -37,6 +38,7 @@ const statusCode = {
 interface CommandList {
 	addr: commandAddr;
 	block: commandBlock;
+	blockack: commandBlockAck;
 	getaddr: commandGetAddr;
 	getblocks: commandGetBlocks;
 	getdata: commandGetData;
@@ -77,6 +79,7 @@ export default class Message {
 	#flagGetVersion: boolean;
 	#flagGetVerack: boolean;
 	#timeStart: number;
+	#timeLastCommand: number;
 	#timeLastComm: number;
 	#timeLastPing: number;
 	#pingTimeout?: ReturnType<typeof setTimeout>;
@@ -86,6 +89,7 @@ export default class Message {
 		this.#commandMessage = {
 			addr: new commandAddr(network),
 			block: new commandBlock(network),
+			blockack: new commandBlockAck(network),
 			getaddr: new commandGetAddr(network),
 			getblocks: new commandGetBlocks(network, task),
 			getdata: new commandGetData(network, task),
@@ -118,6 +122,7 @@ export default class Message {
 				clearTimeout(this.#pingTimeout);
 				let nonce = payload?.nonce;
 				if (Buffer.isBuffer(nonce) && nonce.equals(this.#pingNonce)) {
+					this.#timeLastPing = Date.now();
 					if (typeof this.#pingRes === 'function') {
 						this.#pingRes(true);
 					}
@@ -184,7 +189,11 @@ export default class Message {
 
 		// time
 		this.#timeStart = Date.now();
+		// the time of last get command
+		this.#timeLastCommand = 0;
+		// The time of last get socket data
 		this.#timeLastComm = Date.now();
+		// The time of last get ping command
 		this.#timeLastPing = 0;
 
 		// other
@@ -277,7 +286,7 @@ export default class Message {
 		});
 	}
 
-	async #checkMessageParse(buffer: Buffer): Promise<p2pMessageObject | number> {
+	async #checkMessageParse(buffer: Buffer): Promise<p2pMessageObject | { err: number, length?: number }> {
 		return commandProto.parseBuffer(buffer);
 	}
 
@@ -343,6 +352,7 @@ export default class Message {
 
 	parsePayload(type: string, payloadBuffer: Buffer) {
 		if (this.#commandMessage[type]) {
+			this.#timeLastCommand = Date.now();
 			return this.#commandMessage[type].parsePayload(payloadBuffer);
 		}
 		else {
@@ -376,7 +386,6 @@ export default class Message {
 		let nonce = NetworkUtils.createNonce(8);
 		this.cmd('ping', { nonce });
 		this.#pingNonce = nonce;
-		this.#timeLastPing = Date.now();
 		this.#pingTimeout = setTimeout(() => {
 			this.disconnect(true, false);
 		}, SocketTimeout);
@@ -390,7 +399,6 @@ export default class Message {
 				nonce = NetworkUtils.createNonce(8);
 				this.cmd('ping', { nonce });
 				this.#pingNonce = nonce;
-				this.#timeLastPing = Date.now();
 				this.#pingTimeout = setTimeout(() => {
 					this.#pingRes = undefined;
 					this.#pingNonce = Buffer.alloc(0);
@@ -398,7 +406,7 @@ export default class Message {
 				}, SocketTimeout);
 			}
 			else {
-				nonce === this.#pingNonce;
+				res(false);
 			}
 			this.#pingRes = res;
 		});
@@ -434,6 +442,7 @@ export default class Message {
 	get status() {
 		return {
 			time: {
+				lastCommand: this.#timeLastCommand,
 				lastComm: this.#timeLastComm,
 				lastPing: this.#timeLastPing,
 				start: this.#timeStart

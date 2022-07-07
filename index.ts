@@ -10,10 +10,7 @@ import path from 'path';
 const defultConfigPath = path.join(process.cwd(), './config.json');
 const defultWalletConfigPath = path.join(process.cwd(), './wconfig.json');
 
-const SegfaultHandler = require('segfault-handler');
-SegfaultHandler.registerHandler('crash.log');
-
-console.log(`Program is activated. Node: ${process.version}`);
+console.log('Program is activated');
 
 async function getConfig(path?: string, isNode: boolean = true) {
 	let config;
@@ -50,10 +47,11 @@ program
 program
 	.command('wallet')
 	.option('-wc, --wallet-config [type]')
+	.option('-ro, --rpc-only')
 	.action(async (script, options) => {
 		console.log('Wallet mode!');
 		let opt = await getConfig(options._optionValues.walletConfig, false);
-		initWallet(opt);
+		initWallet(opt, options._optionValues.rpcOnly);
 	});
 
 program

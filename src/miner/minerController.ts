@@ -1,6 +1,11 @@
+import path from 'path';
+import fs from 'fs/promises';
+import { constants } from 'fs';
+import os from 'os';
 import { equationsOffset } from "../blockchain/pow";
 import { MQPHash } from "../crypto/MQPHash";
 import { Mine } from "./mine";
+
 
 const maxN = 63; //If bigger then fix it.
 
@@ -20,11 +25,12 @@ class minerController {
 	private _numOfEquations: number;
 	private _numOfVariables: number;
 
+	public minerBinPath: string;
 	public get fixNumber(): number { return this._fixNumber; }
 
 	public get minerRunFlag(): boolean { return this._minerRunFlag; }
 	public get interruptFlag(): boolean { return this._interruptFlag; }
-	
+
 
 	constructor() {
 		this._fixNumber = 0;
@@ -33,15 +39,44 @@ class minerController {
 		this.cudaRunning = [];
 		this._minerRunFlag = false;
 		this._interruptFlag = true;
+		this.minerBinPath = null;
 	}
 
-	async init(mqphash: MQPHash, nbit: Buffer, enables?: boolean[], whichXWidth?: number) {
+	async init() {
+		let minerBinPathSnapshot;
+		const minerBinDir = path.join(process.cwd(), '/mineBin/');
+		switch (os.platform()) {
+			case 'linux':
+				this.minerBinPath = path.join(minerBinDir, '/mine');
+				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mine');
+				break;
+			case 'win32':
+				this.minerBinPath = path.join(minerBinDir, '/mineWin32.exe');
+				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mineWin32.exe');
+				break;
+			default:
+				console.error("unkow os!")
+				this.minerBinPath = undefined;
+				return;
+		}
+
+		try {
+			await fs.access(this.minerBinPath, constants.R_OK);
+		} catch {
+			let minerBin = await fs.readFile(minerBinPathSnapshot);
+			await fs.mkdir(minerBinDir);
+			await fs.writeFile(this.minerBinPath, minerBin);
+		}
+	}
+
+	async setup(mqphash: MQPHash, nbit: Buffer, enables?: boolean[], whichXWidth?: number) {
 		this._numOfEquations = nbit.readUInt8(0) + equationsOffset;
 		this._numOfVariables = this._numOfEquations + 5;
 
 		this.miners = [];
 		this.enables = [];
 		this.fixStr = [];
+		this.fixIndex = -1;
 
 		let crossbredOpt = {
 			id: 0,
@@ -49,9 +84,9 @@ class minerController {
 			k: 10,
 			t: 12,
 			b: 0,
-			print:false
+			print: false
 		}
-		
+
 		let m = new Mine(this);
 		let numOfDev = await m.getDeviceCount();
 		this.size = numOfDev;
@@ -62,11 +97,11 @@ class minerController {
 
 		for (let i = 0; i < this.size; i++) {
 			this.miners.push(new Mine(this));
-			if (enables == undefined) {
+			if (!enables) {
 				this.enables.push(true);
 			}
 			else {
-				this.enables.push(enables[i] !== undefined ? enables[i] : true);
+				this.enables.push(enables[i] !== undefined ? enables[i] : false);
 			}
 		}
 
@@ -113,7 +148,7 @@ class minerController {
 			}
 		}
 
-		
+
 		this.cudaRunning = [];
 		for (let devID = 0; devID < this.size; devID++) {
 			this.cudaRunning.push(false);

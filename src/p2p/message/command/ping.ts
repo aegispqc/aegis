@@ -1,6 +1,5 @@
 import { interfaceNetwork, Option } from '../../lib/interface';
 import protoMessage from './proto';
-import { createNonce } from '../utils/network';
 import BufferReader from '../utils/bufferReader';
 
 /**
@@ -22,18 +21,17 @@ export default class Ping extends protoMessage {
 	}
 
 	parsePayload(payload: Buffer) {
-		let br = new BufferReader(payload);
-		if (br.length >= 8) {
-			return { nonce: br.custom(8) };
+		if (Buffer.isBuffer(payload) && payload.length === 8) {
+			return { nonce: payload };
 		}
 		else {
-			return { nonce: br.getRemain() };
+			return null;
 		}
 	}
 
 	async getPayload(payloadMessage: Option): Promise<Buffer | null> {
-		if (!Buffer.isBuffer(payloadMessage.nonce)) {
-			return createNonce(8);
+		if (!Buffer.isBuffer(payloadMessage?.nonce)) {
+			return null;
 		}
 		else {
 			return payloadMessage.nonce;

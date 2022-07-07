@@ -7,13 +7,12 @@
       'cflags_cc!': [ '-fno-exceptions' ],
       'cflags': [
         '-W',
-        '-Wall',
         '-O2'
       ],
       'configuration': { 'Release': { 'msvs_settings': { 'VCCLCompilerTool': {
           'Optimization': 0
       }}}},
-      'sources': [ 
+      'sources': [
         'falcon512/falcon512Napi.cc',
         'utils/randombytes.c',
         'falcon512/falconCore/fpr.c',
@@ -40,10 +39,9 @@
       }}}},
       'cflags': [
         '-W',
-        '-Wall',
         '-O2'
       ],
-      'sources': [ 
+      'sources': [
         'falcon1024/falcon1024Napi.cc',
         'utils/randombytes.c',
         'falcon1024/falconCore/fpr.c',

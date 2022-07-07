@@ -5,7 +5,6 @@
       'cflags!': [ '-fno-exceptions' ],
       'cflags_cc!': [ '-fno-exceptions' ],
       'cflags': [
-        '-Wall', 
         '-Wextra', 
         '-Wpedantic', 
         '-Wmissing-prototypes', 
@@ -42,7 +41,6 @@
       'cflags!': [ '-fno-exceptions' ],
       'cflags_cc!': [ '-fno-exceptions' ],
       'cflags': [
-        '-Wall', 
         '-Wextra', 
         '-Wpedantic', 
         '-Wmissing-prototypes', 

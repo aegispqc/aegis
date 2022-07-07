@@ -346,13 +346,12 @@ class WalletHistoryDb {
 				let type = k.type;
 				let txid = value.txid;
 				let voutn = k.voutn;
-				let temp: any = { address, txid: txid.toString('hex'), height: k.height, txn: k.txn, voutn, type: (type) ? 'send' : 'receive' };
+				let temp: any = { address, txid: txid.toString('hex'), height: k.height, txn: k.txn, voutn, type: (type) ? 'send' : 'receive', value: value.value };
 				if (type === 0) {
 					let txid = this.core.getTxIndex(value.txid);
 					if (!txid) {
 						continue;
 					}
-					temp.value = value.value;
 					temp.voutspent = txid.voutspent[voutn];
 				}
 				data.push(temp)

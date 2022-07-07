@@ -66,9 +66,12 @@ class Peer {
 	#verifiedBlockHash?: Buffer;
 	#verifiedBlockHeight?: number;
 	#listenPort: number;
+	#blockSyncTimeoutCount: number;
 	uidInterdependent: string[];
+	#sendBlockQueue: Buffer[];
 	#waitForkDataQueue: BlockData[];
 	#afterForkDataQueue: BlockData[];
+	#syncBlockAckMode: boolean;
 	#connectTimeout?: ReturnType<typeof setTimeout>;
 	#blockSyncTimeout?: ReturnType<typeof setTimeout>;
 	constructor(network: interfaceNetwork, task: Task, setting: peerSetting, servicesOpt: interfaceServicesOpt) {
@@ -112,6 +115,8 @@ class Peer {
 		this.#verifiedBlockHeight;
 		// uid's interdependent in address table
 		this.uidInterdependent = [];
+		// The hash queue for sending blocks via getdata
+		this.#sendBlockQueue = [];
 		// Waiting for a fork in the data queue
 		this.#waitForkDataQueue = [];
 		// Sync blocks after fork completion
@@ -120,6 +125,10 @@ class Peer {
 		this.#connectTimeout;
 		// sync block timeout
 		this.#blockSyncTimeout;
+		// sync timeout count
+		this.#blockSyncTimeoutCount = 0;
+		// sent block by blockack
+		this.#syncBlockAckMode = false;
 
 		// flags
 		this.#flagIsDisconnect = false;
@@ -201,6 +210,7 @@ class Peer {
 			isRelayPeer: this.isRelayPeer,
 			blockInSync: this.#flagBlockInSync,
 			lockBlock: this.#flagLockBlockSync,
+			sendBlock: this.#sendBlockQueue.length > 0,
 			listenPort: this.#listenPort
 		}
 	}
@@ -225,12 +235,9 @@ class Peer {
 				break;
 			case 'getblocks':
 				let getblocks = payload?.data;
-				if (!getblocks) return;
-				let verifiedHeight = getblocks.verifiedHeight;
-				if (typeof verifiedHeight !== 'number') {
-					verifiedHeight = 0;
-				}
-				this.#getblocksProcess(verifiedHeight);
+				if (!getblocks || typeof getblocks !== 'object') return;
+				if (typeof getblocks.verifiedHeight !== 'number' || getblocks.verifiedHeight < 0) getblocks.verifiedHeight = 0;
+				this.#getblocksProcess(getblocks.verifiedHeight, getblocks.height);
 				break;
 			case 'mempool':
 				let poolList = await this.#task.getTxPoolList();
@@ -255,6 +262,11 @@ class Peer {
 				let block = payload?.data;
 				if (!block || (!Buffer.isBuffer(block.header) && !Array.isArray(block.txs))) return;
 				this.#blockProcess(block);
+				break;
+			case 'blockack':
+				let hash = payload?.hash;
+				if (!Buffer.isBuffer(hash)) return;
+				this.#blockackProcess(hash);
 				break;
 			case 'tx':
 				let tx = payload?.data;
@@ -394,8 +406,9 @@ class Peer {
 		this.isRelayPeer = versionData.relay;
 		this._getaddr();
 		this._mempool();
-		let getblocksData = await BlockUtils.getblocksData(this.#task, Math.min(this.#myLastHeight, this.#yourLastHeight));
-		this._getblocks(getblocksData);
+		let getblocksHeight = Math.min(this.#myLastHeight, this.#yourLastHeight);
+		let getblocksData = await BlockUtils.getblocksData(this.#task, getblocksHeight);
+		this._getblocks(getblocksHeight, getblocksData);
 		this.#connectTimeout = setTimeout(() => {
 			this.disconnect();
 		}, SocketTimeout);
@@ -428,9 +441,11 @@ class Peer {
 
 	#resetSyncBlockData() {
 		clearTimeout(this.#blockSyncTimeout);
+		this.#blockSyncTimeoutCount = 0;
 		this.#blockDataQueue = undefined;
 		this.#waitForkDataQueue = [];
 		this.#afterForkDataQueue = [];
+		this.#sendBlockQueue = [];
 		this.#flagBlockInSync = false;
 		this.#flagForkReady = false;
 	}
@@ -456,7 +471,10 @@ class Peer {
 		}
 	}
 
-	async #getblocksProcess(verifiedHeight: number) {
+	async #getblocksProcess(verifiedHeight: number, lastHeight?: number) {
+		if (typeof lastHeight === 'number' && lastHeight >= 0) {
+			this.#syncBlockAckMode = true;
+		}
 		clearTimeout(this.#connectTimeout);
 		if (this.#blockSentHeight > verifiedHeight) {
 			if (this.#resendBlock++ > 10) {
@@ -470,22 +488,23 @@ class Peer {
 
 		let verifiedBlock = await this.#task.getBlockDataByHeight(verifiedHeight);
 		if (!verifiedBlock) return;
-		if (this.#verifiedBlockHeight !== 0
-			&& this.#verifiedBlockHeight > verifiedHeight
+		if (this.#verifiedBlockHeight > 0 && this.#verifiedBlockHeight > verifiedHeight
 			&& this.#yourLastHeight >= this.#myLastHeight) {
-			let getblocksData = await BlockUtils.getblocksData(this.#task, Math.min(this.#myLastHeight, this.#yourLastHeight));
-			this._getblocks(getblocksData);
+			let getblocksData = await BlockUtils.getblocksData(this.#task, this.#myLastHeight);
+			this._getblocks(this.#myLastHeight, getblocksData);
 			this.#verifiedBlockHash = verifiedBlock.hash;
 			this.#verifiedBlockHeight = verifiedHeight;
-			if (verifiedHeight > this.#yourLastHeight) {
-				this.#yourLastHeight = verifiedHeight;
-			}
 			return;
 		}
 		this.#verifiedBlockHash = verifiedBlock.hash;
 		this.#verifiedBlockHeight = verifiedHeight;
-		if (verifiedHeight > this.#yourLastHeight) {
+		if ((typeof lastHeight !== 'number' || lastHeight < 1)
+			&& verifiedHeight > this.#yourLastHeight) {
+			// Temporarily
 			this.#yourLastHeight = verifiedHeight;
+		}
+		else if (lastHeight > this.#yourLastHeight) {
+			this.#yourLastHeight = lastHeight;
 		}
 
 		if (this.#flagLockBlockSync || this.#flagBlockInSync) {
@@ -507,30 +526,27 @@ class Peer {
 	async #invProcess(inv) {
 		if (!inv || typeof inv !== 'object') return null;
 		// block
-		let topHeight = Math.max(this.#verifiedBlockHeight, inv.knownLastHeight);
+		let knownBlocks = typeof inv.block?.length === 'number' ? inv.block.length : 0;
+		let topHeight = this.#verifiedBlockHeight + knownBlocks;
+		let topHeightBlock = this.#task.getBlockDataByHeight(topHeight);
 		if (this.#flagLockBlockSync || this.#flagBlockInSync) { }
-		else if (inv.notfound['2']?.length
-			&& (topHeight + inv.notfound['2'].length) > this.#myLastHeight) {
-			let topHash = this.#verifiedBlockHeight > inv.knownLastHeight ? this.#verifiedBlockHash : inv.knownLastHash;
-			if (typeof inv.knownLastHeight === 'number'
-				&& Buffer.isBuffer(inv.knownLastHash)
-				&& inv.knownLastHeight > this.#verifiedBlockHeight) {
-				this.#verifiedBlockHeight = inv.knownLastHeight;
-				this.#verifiedBlockHash = inv.knownLastHash;
+		else if (inv.notfound['2']?.length && (topHeight + inv.notfound['2'].length) > this.#myLastHeight) {
+			if (topHeightBlock && topHeightBlock.height > this.#verifiedBlockHeight) {
+				this.#verifiedBlockHeight = topHeight;
+				this.#verifiedBlockHash = topHeightBlock.hash;
 			}
 			this.#emitEvent('peerAskForSyncBlock', {
-				knownLastHash: topHash,
-				knownLastHeight: topHeight,
+				knownLastHash: this.#verifiedBlockHash,
+				knownLastHeight: this.#verifiedBlockHeight,
 				blockHash: inv.notfound['2'].slice(0)
 			});
 		}
-		else if (typeof inv.knownLastHeight === 'number'
-			&& inv.knownLastHeight > this.#yourLastHeight) {
-			this.#yourLastHeight = inv.knownLastHeight;
-			this.#verifiedBlockHeight = inv.knownLastHeight;
-			this.#verifiedBlockHash = inv.knownLastHash;
-			let getblocksData = await BlockUtils.getblocksData(this.#task, inv.knownLastHeight);
-			this._getblocks(getblocksData);
+		else if (topHeight > this.#yourLastHeight && topHeightBlock) {
+			this.#yourLastHeight = topHeight;
+			this.#verifiedBlockHeight = topHeight;
+			this.#verifiedBlockHash = topHeightBlock.hash;
+			let getblocksData = await BlockUtils.getblocksData(this.#task, topHeight);
+			this._getblocks(topHeight, getblocksData);
 		}
 		inv.notfound['2'] = [];
 		// tx
@@ -551,14 +567,41 @@ class Peer {
 	}
 
 	#setBlockSyncTimeout() {
-		this.#blockSyncTimeout = setTimeout(() => {
+		clearTimeout(this.#blockSyncTimeout);
+		let lastCommandTime = this.networkStatus.time.lastCommand;
+		let timeoutProcess = () => {
 			console.log('sync block timeout');
 			if (this.#blockDataQueue) {
 				this.#blockDataQueue.stop();
 				this.#blockDataQueue = undefined;
 			}
 			this.#blockSyncFinish(true);
-		}, SyncBlockTimeout);
+			this.#error();
+		}
+		let timeoutCb = () => {
+			let nowTime = this.networkStatus.time;
+			if (nowTime.lastCommand === lastCommandTime
+				&& nowTime.lastComm + SyncBlockTimeout > Date.now()) {
+				this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
+				return;
+			}
+
+			if (!this.#syncBlockAckMode) {
+				timeoutProcess();
+			}
+			else {
+				this.#blockSyncTimeoutCount++;
+				if (this.#blockSyncTimeoutCount >= 5) {
+					timeoutProcess();
+				}
+				else {
+					this._blockack(Buffer.alloc(4));
+					lastCommandTime = nowTime.lastComm;
+					this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
+				}
+			}
+		}
+		this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
 	}
 
 	syncBlockProcess(data: any): boolean {
@@ -617,8 +660,8 @@ class Peer {
 	async #blockProcess(block) {
 		let blockHash = block.hash;
 		if (!this.#flagBlockInSync) return;
-		clearTimeout(this.#blockSyncTimeout);
 		this.#setBlockSyncTimeout();
+		this.#blockSyncTimeoutCount = 0;
 
 		let blockData = new BlockData(new BlockHeader(block.header));
 		for (let i = 0; i < block.txs.length; i++) {
@@ -653,6 +696,7 @@ class Peer {
 			let status = this.#blockDataQueue.add(blockData, index);
 			if (!status) {
 				this.#afterForkDataQueue.push(blockData);
+				this._blockack(blockHash);
 			}
 			else {
 				if (this.#blockDataQueue.isFail()) {
@@ -660,6 +704,9 @@ class Peer {
 				}
 				else if (this.#blockDataQueue.isFinish()) {
 					this.#blockDataQueue = undefined;
+				}
+				else {
+					this._blockack(blockHash);
 				}
 			}
 		}
@@ -677,8 +724,8 @@ class Peer {
 						data: blockHash
 					});
 				}
-				let getblocksData = await BlockUtils.getblocksData(this.#task, Math.min(this.#myLastHeight, this.#yourLastHeight));
-				this._getblocks(getblocksData);
+				let getblocksData = await BlockUtils.getblocksData(this.#task, this.#myLastHeight);
+				this._getblocks(this.#myLastHeight, getblocksData);
 				this.#blockSyncFinish(true);
 			}
 			else {
@@ -686,6 +733,28 @@ class Peer {
 				this.#verifiedBlockHeight = block.height;
 				this.#verifiedBlockHash = blockHash;
 				this.#blockSyncFinish(false);
+			}
+		}
+	}
+
+	async #blockackProcess(hash: Buffer) {
+		let sent = false;
+		for (let i = 0; i < this.#sendBlockQueue.length; i++) {
+			if (!this.#sendBlockQueue[i] || hash.equals(this.#sendBlockQueue[i])) {
+				if (i === 0) {
+					this.#sendBlockQueue.shift();
+					i--;
+				}
+				else {
+					this.#sendBlockQueue[i] = undefined;
+				}
+			}
+			else if (!sent) {
+				let block = this.#task.getBlockDataByHash(this.#sendBlockQueue[i]);
+				if (block) {
+					this._block(block);
+					sent = true;
+				}
 			}
 		}
 	}
@@ -704,8 +773,23 @@ class Peer {
 		}
 		let blocks = getdata.block;
 		if (Array.isArray(blocks) && blocks.length > 0) {
-			for (let i = 0; i < blocks.length; i++) {
-				this._block(blocks[i]);
+			if (this.#syncBlockAckMode) {
+				this.#sendBlockQueue = blocks;
+				for (let i = 0; i < blocks.length; i++) {
+					let blockData = await this.#task.getBlockDataByHash(blocks[i]);
+					if (blockData) {
+						this._block(blockData);
+						break;
+					}
+				}
+			}
+			else {
+				for (let i = 0; i < blocks.length; i++) {
+					let blockData = await this.#task.getBlockDataByHash(blocks[i]);
+					if (blockData) {
+						this._block(blockData);
+					}
+				}
 			}
 		}
 		let txs = getdata.tx;
@@ -728,14 +812,14 @@ class Peer {
 		if (this.#myLastHeight > this.#yourLastHeight) {
 			if (isFork) {
 				let blocksData = await BlockUtils.getblocksData(this.#task, this.#yourLastHeight);
-				this._getblocks(blocksData);
+				this._getblocks(this.#yourLastHeight, blocksData);
 			}
 			else {
 				await this.#sendBlockInv(this.#verifiedBlockHeight + 1, this.#myLastHeight);
 			}
 		}
 		else {
-			this._getblocks(getblocksData);
+			this._getblocks(this.#myLastHeight, getblocksData);
 		}
 	}
 
@@ -797,8 +881,8 @@ class Peer {
 		this.#socketEmit('mempool', {});
 	}
 
-	async _getblocks(getblocksData: Buffer[]) {
-		this.#socketEmit('getblocks', { data: getblocksData });
+	_getblocks(startHeight: number, getblocksData: Buffer[]) {
+		this.#socketEmit('getblocks', { height: this.#myLastHeight, startHeight, data: getblocksData });
 	}
 
 	_block(block) {
@@ -810,7 +894,13 @@ class Peer {
 		});
 	}
 
-	async _tx(tx: { data: Buffer }) {
+	_blockack(hash) {
+		this.#socketEmit('blockack', {
+			data: hash
+		});
+	}
+
+	_tx(tx: { data: Buffer }) {
 		this.#socketEmit('tx', {
 			data: tx
 		});

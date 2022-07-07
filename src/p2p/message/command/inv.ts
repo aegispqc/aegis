@@ -51,28 +51,21 @@ export default class Inv extends protoMessage {
 	async #getBlockData(blocks) {
 		let blockArr = [];
 		let notfound = [];
-		let knownLastHeight = 0;
-		let knownLastHash = Buffer.alloc(0);
 		if (Array.isArray(blocks) && blocks.length > 0) {
 			for (let i = 0; i < blocks.length; i++) {
-				let blockItem = await this.task.getBlockDataByHash(blocks[i]);
-				if (!blockItem) {
-					notfound[notfound.length] = blocks[i];
+				let item = blocks[i];
+				let r = await this.task.blockHashDoesExist(item);
+				if (!r) {
+					notfound[notfound.length] = item;
 				}
 				else {
-					blockArr[blockArr.length] = blockItem;
-					if (blockItem.height > knownLastHeight) {
-						knownLastHeight = blockItem.height;
-						knownLastHash = blockItem.hash;
-					}
+					blockArr[blockArr.length] = item;
 				}
 			}
 		}
 		return {
 			notfound,
-			blocks: blockArr,
-			knownLastHeight,
-			knownLastHash
+			blocks: blockArr
 		}
 	}
 
@@ -133,28 +126,18 @@ export default class Inv extends protoMessage {
 			}
 		}
 		// Block
-		let knownLastHeight = 0;
-		let knownLastHash = Buffer.alloc(0);
 		if (Array.isArray(inv['2'])) {
 			let blockData = await this.#getBlockData(inv['2']);
 			block = blockData.blocks;
 			if (Array.isArray(blockData.notfound) && blockData.notfound.length > 0) {
 				notfound['2'] = blockData.notfound;
 			}
-
-			if (typeof blockData.knownLastHeight === 'number'
-				&& Buffer.isBuffer(blockData.knownLastHash)) {
-				knownLastHeight = blockData.knownLastHeight;
-				knownLastHash = blockData.knownLastHash;
-			}
 		}
 		return {
 			data: {
 				block,
 				tx,
-				notfound,
-				knownLastHeight,
-				knownLastHash
+				notfound
 			}
 		};
 	}

@@ -19,7 +19,7 @@ export default class BufferReader {
 		return this.maxSize;
 	}
 
-	get remainNow() {
+	get remainLen() {
 		return this.maxSize - this.bufIndex;
 	}
 
@@ -44,7 +44,7 @@ export default class BufferReader {
 	}
 
 	getRemain() {
-		return this.custom(this.remainNow);
+		return this.custom(this.remainLen);
 	}
 
 	uint8(): number | null {

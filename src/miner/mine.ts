@@ -23,18 +23,6 @@ class Mine {
 
 	constructor(mc: minerController) {
 		this._minerController = mc;
-
-		switch (os.platform()) {
-			case 'linux':
-				this.path = `${__dirname}/mineBin/mine`;
-				break;
-			case 'win32':
-				this.path = `${__dirname}\\mineBin\\mineWin32.exe`;
-				break;
-			default:
-				console.error("unkow os!")
-				this.path = undefined;
-		}
 	}
 
 	init(mqphash: MQPHash, nbit: Buffer, whichXWidth?: number) {
@@ -53,7 +41,7 @@ class Mine {
 
 	async cal(fix?: string): Promise<{ err?: string, errCode?: number, result?: any }> {
 		return new Promise((r) => {
-			if (this.path == undefined) {
+			if (this._minerController.minerBinPath == undefined) {
 				r({ err: 'no path!' });
 			}
 
@@ -70,7 +58,7 @@ class Mine {
 				opts = ['2', `${this.deviceID}`, `${this.m}`, `${this.n}`, `${this.whichXWidth}`, `${this.startSMCount}`, `${this.mqphash.MQP.coefficient}`];
 			}
 			let str = '';
-			this.child = spawn(this.path, opts);
+			this.child = spawn(this._minerController.minerBinPath, opts);
 			this.child.stdin.write(equations.join('\n'));
 			this.child.stdin.write('\nend\n');
 			
@@ -196,13 +184,13 @@ class Mine {
 
 	async getDeviceCount(): Promise<any> {
 		return new Promise((r) => {
-			if (this.path == undefined) {
+			if (this._minerController.minerBinPath == undefined) {
 				r({ err: 'no path!' });
 			}
 
 			let str = '';
 			let opts = ['0', '0'];
-			const child = spawn(this.path, opts);
+			const child = spawn(this._minerController.minerBinPath, opts);
 
 			child.on('exit', (code) => {
 				if (code == 0) {
@@ -226,13 +214,13 @@ class Mine {
 
 	async getNumOfExecution(): Promise<any> {
 		return new Promise((r) => {
-			if (this.path == undefined) {
+			if (this._minerController.minerBinPath == undefined) {
 				r({ err: 'no path!' });
 			}
 
 			let str = '';
 			let opts = ['1', '0', `${this.m}`, `${this.n}`];
-			const child = spawn(this.path, opts);
+			const child = spawn(this._minerController.minerBinPath, opts);
 
 			child.on('exit', (code) => {
 				if (code == 0) {

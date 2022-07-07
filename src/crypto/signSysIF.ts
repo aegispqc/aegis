@@ -68,7 +68,32 @@ let abstractCore: coreApiType = {
 }
 
 
-function getSignSysIF() {
+type SignSysInterface = {
+	new (privateKey: Buffer, publicKey: Buffer, encryptedPrivateKeyMode: boolean): {
+		publicKey: Buffer;
+		encryptedPrivateKeyMode: boolean;
+		privateKeySize: number;
+		publicKeySize: number;
+		seedSize: number;
+		signSysName: string;
+		sign(data: Buffer, aesKey?: Buffer): false | Buffer;
+		verify(signature: Buffer, data: Buffer): boolean;
+	};
+
+	signCore: coreApiType;
+	privateKeySize: number;
+	publicKeySize: number;
+	signatureSize: number;
+	seedSize: number;
+	signSysName: string;
+
+	genKey(seed?: Buffer): { privateKey: Buffer, publicKey: Buffer, seed: Buffer } | false;
+	verify(signature: Buffer, data: Buffer, publicKey: Buffer): boolean;
+	sign(data: Buffer, privateKey: Buffer): Buffer | false;
+	
+};
+
+function getSignSysIF(): SignSysInterface  {
 	return class SignSys {
 		private privateKey: Buffer;
 		publicKey: Buffer;

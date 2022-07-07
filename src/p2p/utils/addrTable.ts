@@ -177,13 +177,14 @@ class P2PAddress {
 	 * @returns {boolean}
 	 */
 	static isPrivate(ip: string): boolean {
-		let isPrivateIp = ip.match(/(^127\.)|(^192\.168\.)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^::1$)|(^[fF][cCdD])/);
-		if (Array.isArray(isPrivateIp) && isPrivateIp.length > 0) {
-			return true;
-		}
-		else {
-			return false;
-		}
+		// let isPrivateIp = ip.match(/(^127\.)|(^192\.168\.)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^::1$)|(^[fF][cCdD])/);
+		// if (Array.isArray(isPrivateIp) && isPrivateIp.length > 0) {
+		// 	return true;
+		// }
+		// else {
+		// 	return false;
+		// }
+		return false;
 	}
 
 	/**

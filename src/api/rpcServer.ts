@@ -353,7 +353,7 @@ class RpcServer {
 			if (!txRaw) {
 				return { error: `getTx (${txid}) is not fail!` };
 			}
-			return { result: { txid, tx: txRaw, voutspent: tx.voutspent } };
+			return { result: { txid, blockHash: tx.blockHash, blockHeight: tx.blockHeight, blockTxn: tx.blockTxn, tx: txRaw, voutspent: tx.voutspent } };
 		}
 
 		let txJson = tx.blockTx.json;
@@ -361,7 +361,7 @@ class RpcServer {
 			return { error: `getTx (${txid}) is fail!` };
 		}
 
-		return { result: { tx: txJson, voutspent: tx.voutspent } };
+		return { result: { txid, blockHash: tx.blockHash, blockHeight: tx.blockHeight, blockTxn: tx.blockTxn, tx: txJson, voutspent: tx.voutspent } };
 	}
 
 	/**

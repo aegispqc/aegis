@@ -92,6 +92,7 @@ class Task {
 				return r;
 			}
 		}
+		await this.mc.init();
 		return true;
 	}
 
@@ -153,6 +154,10 @@ class Task {
 
 	getSignedTxs(...input: Parameters<Core['getSignedTxs']>) {
 		return this.core.getSignedTxs(...input);
+	}
+
+	blockHashDoesExist(...input: Parameters<Core['blockHashDoesExist']>) {
+		return this.core.blockHashDoesExist(...input);
 	}
 
 	createNewTransation(...input: Parameters<Core['createNewTransation']>) {
@@ -557,7 +562,7 @@ class Task {
 		}
 		else {
 			let whichXWidth: number = 1000;
-			await this.mc.init(mqphash, miningBlock.blockHeader.rawNBit, null, whichXWidth);
+			await this.mc.setup(mqphash, miningBlock.blockHeader.rawNBit, null, whichXWidth);
 			x = await this.mc.getX();
 		}
 
@@ -1021,6 +1026,7 @@ class Task {
 					x.status = 'normal';
 				}
 			});
+			return utxoList;
 		});
 		if (txList.taskErr || !txList.data) {
 			return false;

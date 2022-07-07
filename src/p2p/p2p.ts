@@ -138,14 +138,18 @@ export default class P2P {
 					delete this.#connectedIp[i];
 					continue;
 				}
-				let netStatus = this.#connectedIp[i].status.networkStatus;
+				let peerStatus = this.#connectedIp[i].status;
+				let netStatus = peerStatus.networkStatus;
 				if (netStatus.socketStatus < 0) {
 					delete this.#connectedIp[i];
 				}
 				else if (nowDate > netStatus.time.lastComm + AliveAddr) {
 					this.#connectedIp[i].disconnect(true);
 				}
-				else {
+				else if (!peerStatus.blockInSync && !peerStatus.sendBlock) {
+					this.#connectedIp[i].sendMessage('ping');
+				}
+				else if (netStatus.time.lastPing + HeartbeatTime * 20 < nowDate) {
 					this.#connectedIp[i].sendMessage('ping');
 				}
 				await delay(50);

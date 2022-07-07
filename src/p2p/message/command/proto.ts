@@ -10,11 +10,11 @@ import BufferWriter from '../utils/bufferWritter';
 /**
  * Message structure
  * Size  Description	Data type	Comments
- * 4	 magic		  uint32_t	Magic value indicating message origin network, and used to seek to next message when stream state is unknown
- * 12	command		char[12]	ASCII string identifying the packet content, NULL padded (non-NULL padding results in packet rejected)
- * 4	 length		 uint32_t	Length of payload in number of bytes
- * 4	 checksum	   uint32_t	First 4 bytes of sha256(sha256(payload))
- * ?	 payload		uchar[]	 The actual data
+ * 4	 magic		  	uint32_t	Magic value indicating message origin network, and used to seek to next message when stream state is unknown
+ * 12	 command		char[12]	ASCII string identifying the packet content, NULL padded (non-NULL padding results in packet rejected)
+ * 4	 length		 	uint32_t	Length of payload in number of bytes
+ * 4	 checksum	   	uint32_t	First 4 bytes of sha256(sha256(payload))
+ * ?	 payload		uchar[]	 	The actual data
  */
 
 const getCommandList: { [key: string]: boolean } = {
@@ -28,6 +28,7 @@ const getCommandList: { [key: string]: boolean } = {
 	getheaders: true,
 	tx: true,
 	block: true,
+	blockack: true,
 	headers: true,
 	getaddr: true,
 	mempool: true,
@@ -78,15 +79,14 @@ export default class MessageProto {
 		return Buffer.alloc(0);
 	}
 
-	static parseBuffer(bufferMessage: Buffer): p2pMessageObject | number {
-		if (bufferMessage.length < 24) return 0;
+	static parseBuffer(bufferMessage: Buffer): p2pMessageObject | { err: number, length?: number } {
+		if (bufferMessage.length < 24) return { err: -1 };
 
 		let magic = bufferMessage.slice(0, 4);
-		if (!magic.equals(networkMagic)) return -1;
+		if (!magic.equals(networkMagic)) return { err: -2 };
 		let command = bufferMessage.slice(4, 16).toString('ascii').replace(/\x00/g, '');
 		let length = bufferMessage.slice(16, 20).readUInt32LE();
-
-		if (bufferMessage.length < length + 24) return 0;
+		if (bufferMessage.length < length + 24) return { err: -3, length: length + 24 };
 		let checksum = bufferMessage.slice(20, 24);
 		let payloadBuffer = bufferMessage.slice(24, 24 + length);
 		let remainBuffer = bufferMessage.slice(24 + length);

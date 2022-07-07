@@ -149,6 +149,10 @@ class BlockchainDb {
 		return this.getBlockDataByHash(lastHash);
 	}
 
+	blockHashDoesExist(hash: Buffer): boolean {
+		return this.blockDb.doesExist(hash);
+	}
+
 	/**
 	 * Set new block
 	 * @param {Buffer} hash block hash.

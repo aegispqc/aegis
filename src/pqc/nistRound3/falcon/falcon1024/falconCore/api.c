@@ -76,7 +76,7 @@ int falcon_seed_to_pk(unsigned char *pk, const unsigned char *seed)
 	int8_t f[1024], g[1024], F[1024];
 	uint16_t h[1024];
 	inner_shake256_context rng;
-	size_t u, v;
+	size_t v;
 
 	/*
 	 * Generate key pair.

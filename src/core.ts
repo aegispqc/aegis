@@ -393,6 +393,10 @@ class Core {
 		return this.blockchainDb.getTxIndex(hash);
 	}
 
+	blockHashDoesExist(hash: Buffer): boolean {
+		return this.blockchainDb.blockHashDoesExist(hash);
+	}
+
 	/**
 	 * get Signed transactions.
 	 * @param {BlockTx} blcokTx 

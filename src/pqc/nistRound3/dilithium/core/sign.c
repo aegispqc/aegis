@@ -123,7 +123,7 @@ int crypto_sign_keypair_by_seed(uint8_t *pk, uint8_t *sk, uint8_t *seed) {
 * Returns 0 (success)
 **************************************************/
 int crypto_generate_pk(uint8_t *pk, uint8_t *seed) {
-  uint8_t *sk;
+  uint8_t sk[CRYPTO_SECRETKEYBYTES];
   return crypto_sign_keypair_core(pk, sk, seed, 0);
 }
 
@@ -141,7 +141,7 @@ int crypto_generate_pk(uint8_t *pk, uint8_t *seed) {
 **************************************************/
 int crypto_generate_sk(uint8_t *sk, uint8_t *seed) {
   uint8_t pk[CRYPTO_PUBLICKEYBYTES];
-  return crypto_sign_keypair_core(&pk, sk, seed, 1);
+  return crypto_sign_keypair_core(pk, sk, seed, 1);
 }
 
 /*************************************************

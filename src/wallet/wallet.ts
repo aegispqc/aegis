@@ -46,6 +46,9 @@ class Wallet {
 		if (!kp) {
 			return false;
 		}
+		if(opt.keyTypes.length < 3) {
+			return false;
+		}
 		kp.label = label;
 		let suc = await this.db.addKeyPair(kp);
 		return suc;
