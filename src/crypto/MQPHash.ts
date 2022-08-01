@@ -98,7 +98,7 @@ class MQPHash {
 		};
 	}
 
-	private xToXx(x: Buffer): Buffer | false {
+	xToXx(x: Buffer): Buffer | false {
 		if (x.length !== this._MQP.variablesByte) {
 			console.error(`error input buffer length: ${x.length}, need: ${this._MQP.variablesByte}`);
 			return false;
@@ -126,7 +126,6 @@ class MQPHash {
 		}
 
 		setBufferBit(xixj, this._MQP.coefficient - 1, 1);	//Constant
-
 		return xixj;
 	}
 

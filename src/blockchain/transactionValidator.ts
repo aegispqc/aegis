@@ -177,7 +177,7 @@ class TxValidator {
 
 			lastVout[i] = [];
 			for (let j = 0; j < lastVoutHashes.length; j++) {
-				let lastVoutTx: any = this.blockDb.getTransactionByTxid(lastVoutHashes[i].hash);
+				let lastVoutTx: any = this.blockDb.getTransactionByTxid(lastVoutHashes[j].hash);
 				let forkCacheTx = false;
 				if(lastVoutTx) {
 					if(lastVoutTx.blockHeight >= forkStartHeight) { //over forkStartHeight
@@ -185,7 +185,7 @@ class TxValidator {
 					}
 				}
 				if(!lastVoutTx) {
-					lastVoutTx = forkCache.getTransactionByTxid(lastVoutHashes[i].hash);
+					lastVoutTx = forkCache.getTransactionByTxid(lastVoutHashes[j].hash);
 					if (!lastVoutTx) {
 						this.errorCode = -8;
 						return false;
