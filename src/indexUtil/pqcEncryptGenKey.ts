@@ -44,7 +44,7 @@ async function pqcEncryptGenKey(optionPath?: string, isNode: boolean = true) {
 		return;
 	}
 
-	let ans = await rlQuestion(rl, `The PQCEncrypt  doesn't exist, do you want to create it? (y/n) : `);
+	let ans = await rlQuestion(rl, `The PQCEncrypt doesn't exist, do you want to create it? (y/n) : `);
 	if (!ans.match(/^y(es)?$/i)) {
 		rlClose(rl);
 		process.exit();

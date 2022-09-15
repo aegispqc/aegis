@@ -15,15 +15,16 @@ import {
 	getPqcertByHashValidate,
 	newBlockValidate,
 	newBlockOnlyTxidsValidate,
-	createNewTransationValidate,
+	createTransationValidate,
 	mineValidate,
 	getCacheTxByHashValidate,
-	walletCreateNewTransationValidate,
+	walletCreateTransationValidate,
 	getBalanceValidate,
 	getTxPoolValidate,
 	walletAddWatchAddressValidate,
 	walletGetTxListValidate,
 	peerValidate,
+	walletCreateAdvancedTransationValidate,
 } from './dataSchema/input';
 import { blockTxJsonData, blockTxJsonSchemaValidate } from '../blockchain/dataSchema/txSchema';
 import ErrorCode from '../blockchain/errorCode';
@@ -119,6 +120,10 @@ class RpcServer {
 		this.task.eventEmit.on('addTx', (m) => {
 			this.addTxPollCollector.send({ txid: m.txid.toString('hex'), mining: m.mining });
 		});
+
+		if (this.pqc) {
+			this.pqc.clearSchedulingStart();
+		}
 	}
 
 	serverHandle(req, res) {
@@ -210,7 +215,7 @@ class RpcServer {
 		getTransactionByTxid: this.getTransactionByTxid,
 		getPqcertByHash: this.getPqcertByHash,
 		newBlock: this.newBlock,
-		createNewTransation: this.createNewTransation,
+		createTransation: this.createTransation,
 		txValidator: this.txValidator,
 		addTx: this.addTx,
 		mine: this.mine,
@@ -221,7 +226,8 @@ class RpcServer {
 		getTxPoolByTxid: this.getTxPoolByTxid,
 		getStatus: this.getStatus,
 		//------- wallet -------
-		walletCreateNewTransation: this.walletCreateNewTransation,
+		walletCreateTransation: this.walletCreateTransation,
+		walletCreateAdvancedTransation: this.walletCreateAdvancedTransation,
 		walletGetBalance: this.walletGetBalance,
 		walletReindex: this.walletReindex,
 		walletClearHistory: this.walletClearHistory,
@@ -451,10 +457,10 @@ class RpcServer {
 	 * @param {boolean} rawFlag Whether the transaction is expressed in raw.
 	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async createNewTransation(data: { vin: { txid: string, voutn: number }[][], vout: { address: string, value: string }[], changeAddress: string, opReturn?: string }, replaceLS: boolean = false, rawFlag: boolean = false): Promise<rpcReturn> {
-		if (!createNewTransationValidate({ tx: data, replaceLS })) {
-			console.error(createNewTransationValidate.errors);
-			return { error: createNewTransationValidate.errors[0].message };
+	async createTransation(data: { vin: { txid: string, voutn: number }[][], vout: { address: string, value: string }[], changeAddress: string, opReturn?: string }, replaceLS: boolean = false, rawFlag: boolean = false): Promise<rpcReturn> {
+		if (!createTransationValidate({ tx: data, replaceLS })) {
+			console.error(createTransationValidate.errors);
+			return { error: createTransationValidate.errors[0].message };
 		}
 
 		let thisVin = [];
@@ -476,25 +482,23 @@ class RpcServer {
 			}
 		}
 
-		let changeAddess = Buffer.from(data.changeAddress, 'hex');
 		let opReturn = Buffer.from((data.opReturn) ? data.opReturn : '', 'hex');
 
-		let r = await this.task.createNewTransation(thisVin, thisVout, changeAddess, opReturn, replaceLS);
-
+		let r = await this.task.createTransation(thisVin, thisVout, opReturn, replaceLS);
 		if (!r) {
-			return { error: `createNewTransation fail!` };
+			return { error: `createTransation fail!` };
 		}
 
 		let blockTx = r.blockTx;
 		let txJson = blockTx.json;
 		if (!txJson) {
-			return { error: `createNewTransation fail!` };
+			return { error: `createTransation fail!` };
 		}
 
 		if (rawFlag) {
 			let raw: any = blockTx.getSerialize();
 			if (!raw) {
-				return { error: `createNewTransation fail!` };
+				return { error: `createTransation fail!` };
 			}
 			raw = raw.toString('hex');
 
@@ -690,37 +694,91 @@ class RpcServer {
 	 * Add a new transaction.
 	 * @param {string} srcAddress Send address.
 	 * @param {string} tgtAddress Target address.
-	 * @param {string} value send amount of coin.
+	 * @param {string} value Send amount of coin.
 	 * @param {string} extraValue Amount reserved for fee.
 	 * @param {string} feeRatio Fee ratio. Do not less than 1. 
+	 * @param {boolean} useAllUTXO Use all UTXO
 	 * @param {boolean} rawFlag Whether the transaction is expressed in raw.
 	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async walletCreateNewTransation(srcAddress: string, tgtAddress: string, value: string, extraValue: string = '0', feeRatio: string = '1', rawFlag: boolean): Promise<rpcReturn> {
-		if (!walletCreateNewTransationValidate({ srcAddress, tgtAddress, value, extraValue, feeRatio, rawFlag })) {
-			console.error(walletCreateNewTransationValidate.errors);
-			return { error: walletCreateNewTransationValidate.errors[0].message };
+	async walletCreateTransation(srcAddress: string, tgtAddress: string, value: string, extraValue: string = '0', feeRatio: string = '1', useAllUTXO: boolean = false, rawFlag: boolean): Promise<rpcReturn> {
+		if (!walletCreateTransationValidate({ srcAddress, tgtAddress, value, extraValue, feeRatio, rawFlag })) {
+			console.error(walletCreateTransationValidate.errors);
+			return { error: walletCreateTransationValidate.errors[0].message };
 		}
 
 		let valueBig = BigInt(value);
 		let extraValueBig = BigInt(extraValue);
 		let feeRatioBig = BigInt(feeRatio);
-		let r = await this.task.walletCreateNewTransation(srcAddress, tgtAddress, valueBig, extraValueBig, feeRatioBig);
+		let r = await this.task.walletCreateTransation(srcAddress, tgtAddress, valueBig, extraValueBig, feeRatioBig, useAllUTXO);
 		if (!r) {
-			return { error: `createNewTransation fail!` };
+			return { error: `createTransation fail!` };
 		}
 
 		let blockTx = r.blockTx;
 
 		let txJson = blockTx.json;
 		if (!txJson) {
-			return { error: `createNewTransation fail!` };
+			return { error: `createTransation fail!` };
 		}
 
 		if (rawFlag) {
 			let raw: any = blockTx.getSerialize();
 			if (!raw) {
-				return { error: `createNewTransation fail!` };
+				return { error: `createTransation fail!` };
+			}
+			raw = raw.toString('hex');
+
+			return { result: { inValue: r.inValue, blockTx: { json: txJson, raw } } };
+		}
+
+		return { result: { inValue: r.inValue, blockTx: txJson } };
+	}
+
+	/**
+	 * Add a new transaction.
+	 * @param {string} srcAddress Send address.
+	 * @param {object[]} target { address, value }[]
+	 * @param {string} target[].address Target address.
+	 * @param {string} target[].value Send amount of coin.
+	 * @param {string} extraValue Amount reserved for fee.
+	 * @param {string} feeRatio Fee ratio. Do not less than 1. 
+	 * @param {boolean} useAllUTXO Use all UTXO
+	 * @param {boolean} rawFlag Whether the transaction is expressed in raw.
+	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	async walletCreateAdvancedTransation(srcAddress: string, target: { address: string, value: string }[] | string, extraValue: string = '0', feeRatio: string = '1', useAllUTXO: boolean = false, rawFlag: boolean): Promise<rpcReturn> {
+		if (!walletCreateAdvancedTransationValidate({ srcAddress, target, extraValue, feeRatio, rawFlag })) {
+			console.error(walletCreateAdvancedTransationValidate.errors);
+			return { error: walletCreateAdvancedTransationValidate.errors[0].message };
+		}
+
+		let r
+		let extraValueBig = BigInt(extraValue);
+		let feeRatioBig = BigInt(feeRatio);
+		if (typeof target === 'string') {
+			r = await this.task.walletCreateAdvancedTransation(srcAddress, BigInt(target), extraValueBig, feeRatioBig, useAllUTXO);
+		}
+		else {
+			let targetBig = target.map(({ address, value }) => ({ address, value: BigInt(value) }));
+			r = await this.task.walletCreateAdvancedTransation(srcAddress, targetBig, extraValueBig, feeRatioBig, useAllUTXO);
+		}
+
+		if (!r) {
+			return { error: `createTransation fail!` };
+		}
+
+		let blockTx = r.blockTx;
+
+		let txJson = blockTx.json;
+		if (!txJson) {
+			return { error: `createTransation fail!` };
+		}
+
+		if (rawFlag) {
+			let raw: any = blockTx.getSerialize();
+			if (!raw) {
+				return { error: `createTransation fail!` };
 			}
 			raw = raw.toString('hex');
 
@@ -803,14 +861,12 @@ class RpcServer {
 	 * @param {number} [skip=0] Number of skip.
 	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async walletGetTxList(address: string, limit: number = 20, skip: number = 0, reverse: boolean = true): Promise<rpcReturn> {
-		if (!walletGetTxListValidate({ address, limit, skip, reverse })) {
+	async walletGetTxList(address: string, limit: number = 20, skip: number = 0, reverse: boolean = true, normalFlag?: boolean): Promise<rpcReturn> {
+		if (!walletGetTxListValidate({ address, limit, skip, reverse, normalFlag })) {
 			console.error(walletGetTxListValidate.errors);
 			return { error: walletGetTxListValidate.errors[0].message };
 		}
-
-		let r = await this.task.walletGetTxList(address, { limit, skip, reverse });
-
+		let r = await this.task.walletGetTxList(address, { limit, skip, reverse }, normalFlag);
 		if (!r) {
 			return { error: 'Fail' };
 		}
@@ -831,13 +887,10 @@ class RpcServer {
 			console.error(walletGetTxListValidate.errors);
 			return { error: walletGetTxListValidate.errors[0].message };
 		}
-
 		let r = await this.task.walletGetUTXOList(address, { limit, skip, reverse });
-
 		if (!r) {
 			return { error: 'Fail' };
 		}
-
 		return { result: r };
 	}
 
@@ -980,6 +1033,9 @@ class RpcServer {
 		console.log('rpc server exit');
 		if (!this.server) {
 			return;
+		}
+		if (this.pqc) {
+			this.pqc.clearSchedulingStop();
 		}
 		return new Promise(r => {
 			for (let socket of this.sockets) {

@@ -99,21 +99,21 @@ class Vin {
 	isCoinBase(height?: number): boolean {
 		let bufReader = new BufferReader(this.serialize);
 		let previousOutputCount = bufReader.readCompactSize();
-		if(previousOutputCount!== 0) {
+		if (previousOutputCount !== 0) {
 			return false;
 		}
 
-		if(height) {
+		if (height) {
 			let unlokckScript = this.getUnlockScript();
-			if(!unlokckScript) {
+			if (!unlokckScript) {
 				return false;
 			}
 
-			if(unlokckScript.length !== 4) {
+			if (unlokckScript.length !== 4) {
 				return false;
 			}
 
-			if(height !== unlokckScript.readUInt32LE()) {
+			if (height !== unlokckScript.readUInt32LE()) {
 				return false;
 			}
 		}
@@ -523,7 +523,7 @@ class BlockTx {
 			return false;
 		}
 
-		if(isCoinBase && this.vin.length > 1) { //disable coinbase other vin
+		if (isCoinBase && this.vin.length > 1) { //disable coinbase other vin
 			return false;
 		}
 
@@ -531,6 +531,7 @@ class BlockTx {
 			return false;
 		}
 
+		let lastVout: { [key: string]: { [key: number]: boolean } } = {};
 		for (let i = 0; i < this.vin.length; i++) {
 			if (!this.vin[i].verify()) {
 				return false;
@@ -541,6 +542,24 @@ class BlockTx {
 					return false;
 				}
 			}
+
+			let lastVoutHash = this.vin[i].getLastVoutHashAll();
+			if (!lastVoutHash) {
+				return false;
+			}
+			for (let k = 0; k < lastVoutHash.length; k++) {
+				let hash = lastVoutHash[k].hash.toString('hex');
+				let voutn = lastVoutHash[k].voutn;
+				if (!lastVout[hash]) {
+					lastVout[hash] = {};
+				}
+				else {
+					if (lastVout[hash][voutn]) { //double-spend
+						return false;
+					}
+				}
+				lastVout[hash][voutn] = true;
+			}
 		}
 
 		for (let i = 0; i < this.vout.length; i++) {
@@ -549,10 +568,16 @@ class BlockTx {
 			}
 		}
 
+		let pqcertList = [];
 		for (let i = 0; i < this.pqcert.length; i++) {
 			if (!this.pqcert[i].verify(version.pqcertVer)) {
 				return false;
 			}
+			let hash = this.pqcert[i].getHash('hex');
+			if (pqcertList[hash]) {
+				return false;
+			}
+			pqcertList[hash] = true;
 		}
 
 		return true;

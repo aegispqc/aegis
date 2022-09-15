@@ -6,9 +6,9 @@ import { getSignSysIF } from './signSysIF';
 
 let Secp256k1Core = {
 	genkey(publicKey: Buffer, privateKey: Buffer, seed: Buffer): boolean {
-		for(let i=0; i<10; i++) {
+		for (let i = 0; i < 10; i++) {
 			let sd = randomBytes(32);
-			if(secp256k1.privateKeyVerify(sd)) {
+			if (secp256k1.privateKeyVerify(sd)) {
 				let pk = secp256k1.publicKeyCreate(sd);
 				if (pk) {
 					pk = Buffer.from(pk.buffer);
@@ -64,7 +64,7 @@ let Secp256k1Core = {
 	sign(signature: Buffer, data: Buffer, sk: Buffer): boolean {
 		let nonce = randomBytes(32);
 		let sign = secp256k1.ecdsaSign(shake256(data), sk, { data: nonce }).signature;
-		if(!sign) {
+		if (!sign) {
 			return false;
 		}
 		sign = Buffer.from(sign.buffer);

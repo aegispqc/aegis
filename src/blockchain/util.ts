@@ -230,5 +230,9 @@ async function testMinerAsync(mqh, nbitI, miner) {
 	return false;
 }
 
+function objectIsEmpty(obj: { [key: string]: any }) {
+	return Object.entries(obj).length === 0;
+}
 
-export { getCompactSizeByBuffer, getCompactSizeBufferByNumber, getPushDataSizeBuffer, BufferReader, delay, SIPrefix, testMinerAsync };
+
+export { getCompactSizeByBuffer, getCompactSizeBufferByNumber, getPushDataSizeBuffer, BufferReader, delay, SIPrefix, testMinerAsync, objectIsEmpty };

@@ -16,10 +16,10 @@ function decryption(encrypted: Buffer, key: Buffer) {
 		let decrypted = decipher.update(encrypted.subarray(16));
 		return Buffer.concat([decrypted, decipher.final()]);
 	}
-	catch(e) {
+	catch (e) {
 		return false;
 	}
-	
+
 }
 
 export { encryption, decryption }

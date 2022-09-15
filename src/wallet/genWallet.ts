@@ -57,7 +57,7 @@ function genWallet(opt: { keyTypes: { version: number, signType: number }[] }, a
 	if (aesKey) {
 		keys.forEach((x) => {
 			let originKey = x.privateKey;
-			
+
 			x.privateKey = encryption(x.privateKey, aesKey.data);
 			originKey.fill(0);
 		});
@@ -75,7 +75,7 @@ function genWallet(opt: { keyTypes: { version: number, signType: number }[] }, a
 function recoveryKey(seed: Buffer, addrSeed: Buffer, aesKey?: SafePasswordBuf): Keypair | false {
 	let seedJson = deserialize(seed, { promoteBuffers: true });
 	let keySeed = seedJson.seed;
-	if (aesKey) { 
+	if (aesKey) {
 
 		keySeed = decryption(keySeed, aesKey.data);
 	}
@@ -84,7 +84,7 @@ function recoveryKey(seed: Buffer, addrSeed: Buffer, aesKey?: SafePasswordBuf): 
 
 	for (let i = 0; i < seedJson.keyTypes.length; i++) {
 		let sign = getSignSys(seedJson.keyTypes[i][1]);
-		
+
 		if (!sign) {
 			return false;
 		}

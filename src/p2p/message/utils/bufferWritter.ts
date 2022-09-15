@@ -94,7 +94,7 @@ export default class BufferWriter {
 			buf.writeUInt8(0xFD, 0);
 			buf.writeUInt16LE(num, 1);
 		}
-		else if (num < 0xFFFFFFFF) {
+		else if (num <= 0xFFFFFFFF) {
 			buf = Buffer.alloc(5);
 			buf.writeUInt8(0xFE, 0);
 			buf.writeUInt32LE(num, 1);

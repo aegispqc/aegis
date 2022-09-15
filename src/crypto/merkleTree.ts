@@ -26,7 +26,7 @@ class MerkleTree {
 	}
 
 	pruning(leavesFlag: boolean[]): false | (Buffer | null)[][] {
-		if(this.level === 1) {
+		if (this.level === 1) {
 			return [[this.tree[0][0]]];
 		}
 		if (this.tree[0].length !== leavesFlag.length) {
@@ -86,7 +86,7 @@ class MerkleTree {
 	}
 
 	static getRoot(tree: (Buffer | null)[][], h: number = 0, i: number = 0): false | Buffer {
-		if(tree.length === 1 && tree[0].length === 1) {
+		if (tree.length === 1 && tree[0].length === 1) {
 			return tree[0][0];
 		}
 		if (h >= tree.length) {

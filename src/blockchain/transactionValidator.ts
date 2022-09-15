@@ -101,7 +101,7 @@ class TxValidator {
 		}
 
 		if (isCoinBase) {
-			if(!this.blockTx.vin[0].isCoinBase(blockHeight)) {
+			if (!this.blockTx.vin[0].isCoinBase(blockHeight)) {
 				this.errorCode = -1;
 				return false;
 			}
@@ -179,12 +179,12 @@ class TxValidator {
 			for (let j = 0; j < lastVoutHashes.length; j++) {
 				let lastVoutTx: any = this.blockDb.getTransactionByTxid(lastVoutHashes[j].hash);
 				let forkCacheTx = false;
-				if(lastVoutTx) {
-					if(lastVoutTx.blockHeight >= forkStartHeight) { //over forkStartHeight
+				if (lastVoutTx) {
+					if (lastVoutTx.blockHeight >= forkStartHeight) { //over forkStartHeight
 						lastVoutTx = undefined;
 					}
 				}
-				if(!lastVoutTx) {
+				if (!lastVoutTx) {
 					lastVoutTx = forkCache.getTransactionByTxid(lastVoutHashes[j].hash);
 					if (!lastVoutTx) {
 						this.errorCode = -8;
@@ -200,10 +200,10 @@ class TxValidator {
 				}
 
 				// voutspent
-				if (lastVoutTx.voutspent[lastVoutHashes[j].voutn] !== false) { 
+				if (lastVoutTx.voutspent[lastVoutHashes[j].voutn] !== false) {
 					// voutspent is earlier than the fork height
-					if(!forkCacheTx) {
-						if(lastVoutTx.voutspent[lastVoutHashes[j].voutn] < forkStartHeight) {
+					if (!forkCacheTx) {
+						if (lastVoutTx.voutspent[lastVoutHashes[j].voutn] < forkStartHeight) {
 							this.errorCode = -12;
 							return false;
 						}

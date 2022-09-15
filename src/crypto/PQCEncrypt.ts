@@ -14,18 +14,56 @@ function rightHashFun(data: Buffer): Buffer {
 	return shake256(sha2d(data));
 }
 
+class TimeValidatedHash {
+	private readonly timeStep: number;
+	private readonly hashTable: Set<string>;
+	private readonly timeTable: Map<number, string[]>;
+	constructor(timeStep: number = 60) {
+		this.timeStep = timeStep;
+		this.hashTable = new Set();
+		this.timeTable = new Map();
+	}
+
+	add(hash: string, time: number): boolean {
+		if (this.hashTable.has(hash)) {
+			return false;
+		}
+		this.hashTable.add(hash);
+		let timeUnit = Math.floor(time / this.timeStep);
+		if (!this.timeTable.has(timeUnit)) {
+			this.timeTable.set(timeUnit, []);
+		}
+		this.timeTable.get(timeUnit).push(hash);
+		return true;
+	}
+
+	clear() {
+		let now = Math.floor(Date.now() / this.timeStep) + 2;
+		this.timeTable.forEach((value, key) => {
+			if (key < now) {
+				this.timeTable.delete(key);
+				value.forEach(x => {
+					this.hashTable.delete(x);
+				});
+			}
+		});
+	}
+}
+
 class PQCEncrypt {
 	private falcon512?: Falcon512;
-	private secp256k1?: Secp256k1
-	signSeed: Buffer;
-	aesKey: Buffer;
-	pubKey: Buffer;
+	private secp256k1?: Secp256k1;
+	private timeValidatedHash: TimeValidatedHash;
+	private clearTimmer?: ReturnType<typeof setInterval>;
+	readonly signSeed: Buffer;
+	readonly aesKey: Buffer;
+	readonly pubKey: Buffer;
 	cliPubKey: Buffer;
 
 	constructor(signSeed: Buffer = cpt.randomBytes(32), aesKey: Buffer = cpt.randomBytes(32)) {
 		this.signSeed = signSeed;
-		this.cliPubKey;
 		this.aesKey = aesKey;
+		this.timeValidatedHash = new TimeValidatedHash(60);
 
 		let pubkey = [];
 		let fhashtree = new FullSkewedHashTree(signSeed, 2, leftHashFun, rightHashFun);
@@ -79,11 +117,11 @@ class PQCEncrypt {
 		let time = Math.floor(Date.now() / 1000);
 		let timeBuf = Buffer.alloc(4);
 		timeBuf.writeUInt32BE(time);
-		
+
 		return encryption(Buffer.concat([timeBuf, falconSign, eccSign, msg]), this.aesKey);
 	}
 
-	decryption(sdata: Buffer, timeVerify: number = 5): Buffer | false {
+	decryption(sdata: Buffer, timeVerify: number = 30): Buffer | false {
 		let data = decryption(sdata, this.aesKey);
 		if (!data) {
 			return false;
@@ -94,12 +132,15 @@ class PQCEncrypt {
 		let falconSign = data.subarray(4, 4 + falconSignLen);
 		let eccSign = data.subarray(4 + falconSignLen, 4 + falconSignLen + Secp256k1.signatureSize);
 		let msg = data.subarray(4 + falconSignLen + Secp256k1.signatureSize);
-		if(timeVerify) {
-			let now = Math.floor(Date.now() / 1000);
-			if((now - msgTime) > timeVerify || (msgTime - now) > timeVerify) {
+		let now = Math.floor(Date.now() / 1000);
+		if (timeVerify) {
+			if ((now - msgTime) > timeVerify || (msgTime - now) > timeVerify) {
 				console.log('PQCEncrypt time verify fail');
 				return false;
 			}
+		}
+		if (!this.timeValidatedHash.add(shake256XOF(sdata, 16, 'base64'), now)) {
+			return false;
 		}
 		if (!this.cliPubKey) {
 			return msg;
@@ -111,8 +152,23 @@ class PQCEncrypt {
 		if (verifyMulti(verifySign, msg)) {
 			return msg;
 		}
-		
+
 		return false;
+	}
+
+	clearSchedulingStart() {
+		if (this.clearTimmer) {
+			clearInterval(this.clearTimmer);
+		}
+		this.clearTimmer = setInterval(() => {
+			this.timeValidatedHash.clear();
+		}, 120000);
+	}
+
+	clearSchedulingStop() {
+		if (this.clearTimmer) {
+			clearInterval(this.clearTimmer);
+		}
 	}
 }
 

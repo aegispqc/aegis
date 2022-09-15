@@ -69,7 +69,7 @@ let abstractCore: coreApiType = {
 
 
 type SignSysInterface = {
-	new (privateKey: Buffer, publicKey: Buffer, encryptedPrivateKeyMode: boolean): {
+	new(privateKey: Buffer, publicKey: Buffer, encryptedPrivateKeyMode: boolean): {
 		publicKey: Buffer;
 		encryptedPrivateKeyMode: boolean;
 		privateKeySize: number;
@@ -90,10 +90,9 @@ type SignSysInterface = {
 	genKey(seed?: Buffer): { privateKey: Buffer, publicKey: Buffer, seed: Buffer } | false;
 	verify(signature: Buffer, data: Buffer, publicKey: Buffer): boolean;
 	sign(data: Buffer, privateKey: Buffer): Buffer | false;
-	
 };
 
-function getSignSysIF(): SignSysInterface  {
+function getSignSysIF(): SignSysInterface {
 	return class SignSys {
 		private privateKey: Buffer;
 		publicKey: Buffer;
@@ -124,6 +123,10 @@ function getSignSysIF(): SignSysInterface  {
 			return SignSys.seedSize;
 		}
 
+		get nonceSize() {
+			return SignSys.nonceSize;
+		}
+
 		get signSysName() {
 			return SignSys._signSysName;
 		}
@@ -149,6 +152,10 @@ function getSignSysIF(): SignSysInterface  {
 
 		static get seedSize(): number {
 			return SignSys.signCore.getSeedLength();
+		}
+
+		static get nonceSize(): number {
+			return SignSys.signCore.getNonceLength();
 		}
 
 		static get signSysName(): string {

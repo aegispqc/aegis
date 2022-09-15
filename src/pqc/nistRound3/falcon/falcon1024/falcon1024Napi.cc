@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "falconCore/api.h"
-
 using namespace Napi;
 
 #define FALCON1024_CRYPTO_SK_SIZE           CRYPTO_SECRETKEYBYTES
@@ -11,7 +10,6 @@ using namespace Napi;
 #define FALCON1024_CRYPTO_SIGN_SIZE         CRYPTO_BYTES
 #define FALCON1024_CRYPTO_NONCE_LEN         40
 #define FALCON1024_CRYPTO_SEED_LEN          48
-
 /**
  * info[0]: buffer of pk
  * info[1]: buffer of sk

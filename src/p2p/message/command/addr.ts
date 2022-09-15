@@ -45,7 +45,7 @@ export default class Addr extends protoMessage {
 			if (item && typeof item === 'object') {
 				let ip = item.ip;
 				let port = item.port;
-				if(item.status){
+				if (item.status) {
 					let timestamp = Math.floor(item.status.updateTime / 1000);
 					let services = typeof item.status.services === 'bigint' ? item.status.services : 0n;
 					bw.netAddr(services, ip, port, timestamp);

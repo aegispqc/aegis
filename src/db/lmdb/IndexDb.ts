@@ -1,12 +1,13 @@
+import * as lmdb from 'lmdb';
 class IndexDb {
-	readonly blockHeightIndexDb: any;
-	readonly txidIndexDb: any;
-	readonly pqcertIndexDb: any;
+	readonly blockHeightIndexDb: lmdb.Database;
+	readonly txidIndexDb: lmdb.Database;
+	readonly pqcertIndexDb: lmdb.Database;
 
-	constructor(dbRoot) {
-		this.blockHeightIndexDb = dbRoot.openDB({ name: 'block_height_index', keyIsUint32: true });
-		this.txidIndexDb = dbRoot.openDB({ name: 'block_txid_index', keyIsBuffer: true });
-		this.pqcertIndexDb = dbRoot.openDB({ name: 'block_pqcert_index', keyIsBuffer: true });
+	constructor(dbRoot: lmdb.RootDatabase) {
+		this.blockHeightIndexDb = dbRoot.openDB({ name: 'block_height_index', keyEncoding: 'uint32' });
+		this.txidIndexDb = dbRoot.openDB({ name: 'block_txid_index', keyEncoding: 'binary' });
+		this.pqcertIndexDb = dbRoot.openDB({ name: 'block_pqcert_index', keyEncoding: 'binary' });
 	}
 
 	async setHeightIndex(height: number, hash: Buffer) {

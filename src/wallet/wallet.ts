@@ -46,7 +46,7 @@ class Wallet {
 		if (!kp) {
 			return false;
 		}
-		if(opt.keyTypes.length < 3) {
+		if (opt.keyTypes.length < 3) {
 			return false;
 		}
 		kp.label = label;
@@ -180,6 +180,10 @@ class Wallet {
 		return this.db.getAddress(this.wid, Buffer.from(address, 'hex'));
 	}
 
+	addressDoseExist(address: string) {
+		return this.db.addressDoesExist(this.wid, Buffer.from(address, 'hex'));
+	}
+
 	getAddressDetails(address: string): false | { hash: string, version: number, level: number, signSys: string[], label?: string } {
 		let w = this.db.getKeyPairById(this.wid);
 		if (!w) {
@@ -246,7 +250,7 @@ class Wallet {
 		}
 
 		let aesKey;
-		if(aesKeySafe) {
+		if (aesKeySafe) {
 			aesKey = aesKeySafe.data;
 		}
 
@@ -378,11 +382,11 @@ class Wallet {
 		return photon;
 	}
 
-	signTx(address: string, blockTx: BlockTx, signNum: number[], feeRatio: bigint = 1n, changeOrder?: number, aesKeySafe?: SafePasswordBuf) {
-		if (!changeOrder) {
-			changeOrder = blockTx.vout.length - 1;
+	signTx(address: string, blockTx: BlockTx, signNum: number[], feeRatio: bigint = 1n, feeVoutN?: number, aesKeySafe?: SafePasswordBuf) {
+		if (!feeVoutN) {
+			feeVoutN = blockTx.vout.length - 1;
 		}
-		else if (changeOrder > blockTx.vout.length - 1) {
+		else if (feeVoutN > blockTx.vout.length - 1) {
 			return false;
 		}
 
@@ -416,20 +420,23 @@ class Wallet {
 		}
 
 		signPhoton = signPhoton * txNonUlks.vin.length;
-
 		// - (txNonUlks.vin.length): ulksPhoton CompactSize = 0: 1byte
 		let photon = signPhoton + ulksPhoton - (txNonUlks.vin.length);
-
 		let fee = (BigInt(photon) * feeRatio);
-
-		let orValue: bigint = txNonUlks.vout[changeOrder].value - fee;
-
+		let orValue: bigint = txNonUlks.vout[feeVoutN].value - fee;
 		if (orValue < 0n) {
 			return false;
 		}
-
-		txNonUlks.vout[changeOrder].value = orValue;
-		txOr.vout[changeOrder].value = orValue;
+		else if (orValue === 0n) {
+			// Delete Invalid Output 
+			txNonUlks.vout.splice(feeVoutN, 1);
+			txOr.vout.splice(feeVoutN, 1);
+		}
+		else {
+			// Deduct the fee
+			txNonUlks.vout[feeVoutN].value = orValue;
+			txOr.vout[feeVoutN].value = orValue;
+		}
 
 		let unlockScripts = [];
 		for (let i = 0; i < txOr.vin.length; i++) {
@@ -448,6 +455,132 @@ class Wallet {
 
 			signMsg = Buffer.concat([signMsg, hashtype]);
 			let sign = this.sign(address, signNum, signMsg, aesKeySafe);
+			if (!sign) {
+				return false;
+			}
+
+			let unlockScript: any = [];
+			for (let j = 0; j < sign.length; j++) {
+				let pushN = getPushDataSizeBuffer(sign[j].sign.length + 1);
+				if (!pushN) {
+					return false;
+				}
+
+				unlockScript.push(pushN);
+				unlockScript.push(Buffer.from([sign[j].order]));
+				unlockScript.push(sign[j].sign);
+			}
+			unlockScript.push(Buffer.from([1, 1])); //hashtype
+			unlockScript = Buffer.concat(unlockScript);
+
+			unlockScripts[i] = unlockScript;
+			txNonUlks.vin[i].resetUnlockScript(Buffer.alloc(0));
+		}
+
+		for (let i = 0; i < unlockScripts.length; i++) {
+			txNonUlks.vin[i].resetUnlockScript(unlockScripts[i]);
+		}
+
+		return txNonUlks;
+	}
+
+	signTxMultiAddress(addressList: { address: string, signSelect: number[], signPhoton?: number }[], blockTx: BlockTx, feeRatio: bigint = 1n, feeVoutN?: number, aesKeySafe?: SafePasswordBuf) {
+		if (!feeVoutN) {
+			feeVoutN = blockTx.vout.length - 1;
+		}
+		else if (feeVoutN > blockTx.vout.length - 1) {
+			return false;
+		}
+
+		let txBuf = blockTx.getSerialize();
+		if (!txBuf) {
+			return false;
+		}
+
+		let txOr = BlockTx.serializeToClass(txBuf);
+		if (!txOr) {
+			return false;
+		}
+
+		let txNonUlks = BlockTx.serializeToClass(txBuf);
+		if (!txNonUlks) {
+			return false;
+		}
+
+		txNonUlks.vin.forEach(x => {
+			x.resetUnlockScript(Buffer.alloc(0)); // unlockscript = <buffer >
+		});
+
+		let ulksPhoton = txNonUlks.getPhoton();
+		if (!ulksPhoton) {
+			return false;
+		}
+
+		// - (txNonUlks.vin.length): ulksPhoton CompactSize = 0: 1byte
+		let photon = ulksPhoton - (txNonUlks.vin.length);
+		let addAddressListObj: { [key: string]: { address: string, signSelect: number[], signPhoton?: number } } = {};
+		for (let i = 0; i < addressList.length; i++) {
+			let { address, signSelect } = addressList[i];
+			let signPhoton = this.getSignPhoton(address, signSelect);
+			if (!signPhoton) {
+				return false;
+			}
+			addressList[i].signPhoton = signPhoton;
+			addAddressListObj[address] = addressList[i];
+		}
+
+		for (let i = 0; i < blockTx.vin.length; i++) {
+			let thisUnlockScript = blockTx.vin[i].getUnlockScript();
+			if (!thisUnlockScript) {
+				return false;
+			}
+			let address = thisUnlockScript.subarray(1, 33).toString('hex');
+			if (!addAddressListObj[address]) {
+				return false;
+			}
+			photon += addAddressListObj[address].signPhoton;
+		}
+
+		let fee = (BigInt(photon) * feeRatio);
+		let orValue: bigint = txNonUlks.vout[feeVoutN].value - fee;
+
+		if (orValue < 0n) {
+			return false;
+		}
+		else if (orValue === 0n) {
+			// Delete Invalid Output 
+			txNonUlks.vout.splice(feeVoutN, 1);
+			txOr.vout.splice(feeVoutN, 1);
+		}
+		else {
+			// Deduct the fee
+			txNonUlks.vout[feeVoutN].value = orValue;
+			txOr.vout[feeVoutN].value = orValue;
+		}
+
+		let unlockScripts = [];
+		for (let i = 0; i < txOr.vin.length; i++) {
+			let thisUnlockScript = blockTx.vin[i].getUnlockScript();
+			if (!thisUnlockScript) {
+				return false;
+			}
+			let address = thisUnlockScript.subarray(1, 33).toString('hex');
+
+			let lastUlks = txOr.vin[i].getUnlockScript();
+			if (!lastUlks) {
+				return false;
+			}
+			txNonUlks.vin[i].resetUnlockScript(lastUlks);
+
+			let hashtype = Buffer.from([1, 0, 0, 0]);
+			let signMsg = txNonUlks.getSerialize();
+
+			if (!signMsg) {
+				return false;
+			}
+
+			signMsg = Buffer.concat([signMsg, hashtype]);
+			let sign = this.sign(address, addAddressListObj[address].signSelect, signMsg, aesKeySafe);
 			if (!sign) {
 				return false;
 			}
@@ -572,7 +705,7 @@ class Wallet {
 
 		return serialize(json);
 	}
-	
+
 	exportAllWallet() {
 		let kps = this.db.getKeyPairList(true);
 		if (!kps) {
@@ -593,13 +726,13 @@ class Wallet {
 				label: kp.label,
 				addrs: []
 			}
-	
+
 			for (let i = 0; i < addrs.length; i++) {
 				temp.addrs[i] = { addressSeed: addrs[i].addressSeed, label: addrs[i].label };
 			}
 			result.push(temp);
 		}
-		
+
 		return { wallets: result, time: Date.now() };
 	}
 
@@ -630,15 +763,15 @@ class Wallet {
 	}
 
 	async importWallet(recoverySeed: recoverySeed, aesKeySafe: SafePasswordBuf) {
-		if(recoverySeed.encryptionFlag && !aesKeySafe) {
+		if (recoverySeed.encryptionFlag && !aesKeySafe) {
 			return false;
 		}
 
 		let keyData = recoveryKey(recoverySeed.keySeed, recoverySeed.addrSeed, aesKeySafe);
-		if(!keyData) {
+		if (!keyData) {
 			return false;
 		}
-		
+
 		let kpList = this.db.getKeyPairList(true);
 		if (!kpList) {
 			return false;
@@ -658,7 +791,7 @@ class Wallet {
 				return false;
 			}
 			let hash = pqcertPubKey.getHash();
-			if(!hash) {
+			if (!hash) {
 				return false;
 			}
 
@@ -709,7 +842,7 @@ class Wallet {
 		let address = [];
 		for (let i = 0; i < recoverySeed.addrs.length; i++) {
 			let r = await this.db.createAddress(newWid, recoverySeed.addrs[i].addressSeed, recoverySeed.addrs[i].label);
-			if(!r) {
+			if (!r) {
 				console.log('createAddress fail', recoverySeed.addrs[i].addressSeed);
 			}
 			else {

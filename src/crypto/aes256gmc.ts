@@ -21,11 +21,11 @@ function decryption(encrypted: Buffer, key: Buffer): Buffer | undefined {
 		let decrypted = decipher.update(encryptedData);
 		return Buffer.concat([decrypted, decipher.final()]);
 	}
-	catch(e) {
+	catch (e) {
 		console.log(e);
 		return;
 	}
-	
+
 }
 
 export { encryption, decryption }

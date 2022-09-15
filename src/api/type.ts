@@ -19,7 +19,7 @@ function bigIntToFloatString(v: bigint): string {
 function floatStringToBigInt(v: string) {
 	let str = v.split('.');
 	let ip = BigInt(str[0]);
-	let fp = BigInt((str[1] || '0').slice(0,8).padEnd(8, '0'));
+	let fp = BigInt((str[1] || '0').slice(0, 8).padEnd(8, '0'));
 	return (ip * 100000000n) + fp;
 }
 
@@ -36,10 +36,10 @@ function bufferToObj(v: Buffer, bufferEncode: BufferEncoding) {
 
 function floatToPercentage(v: number, decimal: number = 1) {
 	let p = Math.round(v * 100 * Math.pow(10, decimal));
-	if(p === 0) {
+	if (p === 0) {
 		return `< ${Math.pow(10, -decimal)}%`
 	}
-	p /=  Math.pow(10, decimal);
+	p /= Math.pow(10, decimal);
 	return `${p}%`;
 }
 

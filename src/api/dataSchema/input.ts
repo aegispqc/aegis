@@ -88,7 +88,7 @@ const newBlockOnlyTxidsSchema = {
 	required: ['block']
 }
 
-const createNewTransationSchema = {
+const createTransationSchema = {
 	type: 'object',
 	properties: {
 		tx: {
@@ -133,7 +133,8 @@ const mineSchema = {
 	type: 'object',
 	properties: {
 		address: {
-			"anyOf": [				hash,
+			anyOf: [
+				hash,
 				{ "type": 'boolean' }
 			]
 		},
@@ -151,7 +152,7 @@ const getCacheTxByHashSchema = {
 	required: ['hash']
 }
 
-const walletCreateNewTransationSchema = {
+const walletCreateTransationSchema = {
 	type: 'object',
 	properties: {
 		srcAddress: hash,
@@ -159,9 +160,38 @@ const walletCreateNewTransationSchema = {
 		value: uintString,
 		extraValue: uintString,
 		feeRatio: uintString,
+		useAllUTXO: booleanType,
 		rawFlag: booleanType,
 	},
 	required: ['srcAddress', 'tgtAddress', 'value']
+}
+
+const walletCreateAdvancedTransationSchema = {
+	type: 'object',
+	properties: {
+		srcAddress: hash,
+		target: {
+			anyOf: [
+				{
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							address: hash,
+							value: uintString
+						},
+						required: ['address', 'value']
+					}
+				},
+				uintString
+			]
+		},
+		extraValue: uintString,
+		feeRatio: uintString,
+		useAllUTXO: booleanType,
+		rawFlag: booleanType,
+	},
+	required: ['srcAddress', 'target']
 }
 
 const getBalanceSchema = {
@@ -170,7 +200,7 @@ const getBalanceSchema = {
 		address: {
 			anyOf: [
 				hash,
-				{ 
+				{
 					type: 'array',
 					items: hash
 				}
@@ -202,7 +232,8 @@ const walletGetTxListSchema = {
 		address: hash,
 		skip: uint32,
 		limit: uint32,
-		reverse: booleanType
+		reverse: booleanType,
+		normalFlag: booleanType
 	},
 	required: ['address']
 }
@@ -226,39 +257,37 @@ const getBlockDataByHashValidate = ajv.compile(getBlockDataByHashSchema);
 const getBlockDataByHeightValidate = ajv.compile(getBlockDataByHeightSchema);
 const getTransactionByTxidValidate = ajv.compile(getTransactionByTxidSchema);
 const getPqcertByHashValidate = ajv.compile(getPqcertByHashSchema);
-const newBlockValidate = ajv.compile(newBlockSchema);
-const createNewTransationValidate = ajv.compile(createNewTransationSchema);
-const mineValidate = ajv.compile(mineSchema);
 const getCacheTxByHashValidate = ajv.compile(getCacheTxByHashSchema);
-const walletCreateNewTransationValidate = ajv.compile(walletCreateNewTransationSchema);
 const getBalanceValidate = ajv.compile(getBalanceSchema);
 const getTxPoolValidate = ajv.compile(getTxPoolSchema);
+const newBlockValidate = ajv.compile(newBlockSchema);
+const createTransationValidate = ajv.compile(createTransationSchema);
+const walletCreateTransationValidate = ajv.compile(walletCreateTransationSchema);
+const walletCreateAdvancedTransationValidate = ajv.compile(walletCreateAdvancedTransationSchema);
 const walletAddWatchAddressValidate = ajv.compile(walletAddWatchAddressSchema);
 const walletGetTxListValidate = ajv.compile(walletGetTxListSchema);
 const peerValidate = ajv.compile(peerSchema);
+const mineValidate = ajv.compile(mineSchema);
 const newBlockOnlyTxidsValidate = ajv.compile(newBlockOnlyTxidsSchema);
 
-
-
-export { 
-
-	getLastBlockValidate, 
-	getBlockDataByHashValidate, 
-	getBlockDataByHeightValidate, 
-	getTransactionByTxidValidate, 
-	getPqcertByHashValidate, 
-	newBlockValidate,
-	createNewTransationValidate,
-	mineValidate,
+export {
+	getLastBlockValidate,
+	getBlockDataByHashValidate,
+	getBlockDataByHeightValidate,
+	getTransactionByTxidValidate,
+	getPqcertByHashValidate,
 	getCacheTxByHashValidate,
-	walletCreateNewTransationValidate,
 	getBalanceValidate,
 	getTxPoolValidate,
+	newBlockValidate,
+	createTransationValidate,
+	walletCreateTransationValidate,
+	walletCreateAdvancedTransationValidate,
 	walletAddWatchAddressValidate,
 	walletGetTxListValidate,
 	peerValidate,
+	mineValidate,
 	newBlockOnlyTxidsValidate,
-	
 }
 
 

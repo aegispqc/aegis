@@ -5,15 +5,6 @@ const equationsOffset = 31;
 const nbitSampleRate = 200;
 const referenceSeconds = 600;
 
-//------- test -------
-// const equationsOffset = 0;
-// const nbitSampleRate = 20;
-// const referenceSeconds = 30;
-// const nbitSampleRate = 60;
-// const referenceSeconds = 120;
-
-
-
 /**
  * @param {Buffer} seed - Block Header, Does not contain
  * @param {Buffer} nbit - 2 byte; First is equations (Rough adjustment), last is threshold (Fine-tune)
@@ -111,7 +102,7 @@ function calculateNbit(targetTime: number, lastNbit: Buffer, windowSize: number,
 function getDifficultyByNbit(nbit: Buffer): number {
 	let exponent = nbit.readUInt8(0);
 	let threshold = nbit.readUInt8(1);
-	return exponent + Math.log2(512/(512 - threshold));
+	return exponent + Math.log2(512 / (512 - threshold));
 }
 
 export {

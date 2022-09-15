@@ -64,16 +64,16 @@ class Peer {
 	isRelayPeer: boolean;
 	#blockDataQueue?: BlockDataQueue;
 	#verifiedBlockHash?: Buffer;
-	#verifiedBlockHeight?: number;
+	#verifiedBlockHeight: number;
 	#listenPort: number;
 	#blockSyncTimeoutCount: number;
 	uidInterdependent: string[];
 	#sendBlockQueue: Buffer[];
 	#waitForkDataQueue: BlockData[];
 	#afterForkDataQueue: BlockData[];
-	#syncBlockAckMode: boolean;
 	#connectTimeout?: ReturnType<typeof setTimeout>;
 	#blockSyncTimeout?: ReturnType<typeof setTimeout>;
+	newBlockCount: number;
 	constructor(network: interfaceNetwork, task: Task, setting: peerSetting, servicesOpt: interfaceServicesOpt) {
 		this.#task = task;
 		this.myUid = setting.uid;
@@ -112,7 +112,7 @@ class Peer {
 		// Hash value of the last verified block
 		this.#verifiedBlockHash;
 		// Height of the last verified block
-		this.#verifiedBlockHeight;
+		this.#verifiedBlockHeight = 0;
 		// uid's interdependent in address table
 		this.uidInterdependent = [];
 		// The hash queue for sending blocks via getdata
@@ -127,8 +127,6 @@ class Peer {
 		this.#blockSyncTimeout;
 		// sync timeout count
 		this.#blockSyncTimeoutCount = 0;
-		// sent block by blockack
-		this.#syncBlockAckMode = false;
 
 		// flags
 		this.#flagIsDisconnect = false;
@@ -211,6 +209,7 @@ class Peer {
 			blockInSync: this.#flagBlockInSync,
 			lockBlock: this.#flagLockBlockSync,
 			sendBlock: this.#sendBlockQueue.length > 0,
+			verifiedBlockHeight: this.#verifiedBlockHeight,
 			listenPort: this.#listenPort
 		}
 	}
@@ -236,7 +235,7 @@ class Peer {
 			case 'getblocks':
 				let getblocks = payload?.data;
 				if (!getblocks || typeof getblocks !== 'object') return;
-				if (typeof getblocks.verifiedHeight !== 'number' || getblocks.verifiedHeight < 0) getblocks.verifiedHeight = 0;
+				if (getblocks.verifiedHeight < 0 || getblocks.height < 0) return this.#error();
 				this.#getblocksProcess(getblocks.verifiedHeight, getblocks.height);
 				break;
 			case 'mempool':
@@ -308,7 +307,7 @@ class Peer {
 				break;
 			case 'error':
 				if (msg && typeof msg === 'object') {
-					if (msg.code === 'ETIMEDOUT') {
+					if (msg.code === 'ETIMEDOUT' || msg.code === 'ECONNREFUSED') {
 						this.disconnect(false, true);
 					}
 					else {
@@ -368,6 +367,7 @@ class Peer {
 	}
 
 	#error(isMalicious: boolean = false) {
+		console.log(`${this.ip}:${this.port} p2p error`);
 		if (this.#isMalicious === true) {
 			this.#isMalicious = isMalicious;
 		}
@@ -393,12 +393,15 @@ class Peer {
 		}
 		this.yourUid = versionData.uid;
 		this.#yourVersion = versionData.version;
+		let networkStatus = this.networkStatus;
 		this.#emitEvent('peerConnected', {
 			uid: versionData.uid,
 			ip: this.ip,
 			port: this.port,
 			listenPort: yourListenPort,
-			services: this.networkStatus.services,
+			services: networkStatus.services,
+			version: this.#yourVersion,
+			subVersion: networkStatus.subVersion,
 			relay: versionData.relay
 		});
 
@@ -433,6 +436,7 @@ class Peer {
 			}
 		}
 		if (inv.length > 0) {
+			this.#blockSentHeight = startHeight;
 			this._inv({
 				'2': inv
 			});
@@ -472,15 +476,12 @@ class Peer {
 	}
 
 	async #getblocksProcess(verifiedHeight: number, lastHeight?: number) {
-		if (typeof lastHeight === 'number' && lastHeight >= 0) {
-			this.#syncBlockAckMode = true;
-		}
+		console.log(`${this.ip}:${this.port} block verify ${verifiedHeight}, ${lastHeight}`);
 		clearTimeout(this.#connectTimeout);
 		if (this.#blockSentHeight > verifiedHeight) {
-			if (this.#resendBlock++ > 10) {
+			if (++this.#resendBlock > 4) {
 				return this.disconnect(true);
 			}
-			this.#blockSentHeight = verifiedHeight;
 		}
 		else {
 			this.#resendBlock = 0;
@@ -496,21 +497,21 @@ class Peer {
 			this.#verifiedBlockHeight = verifiedHeight;
 			return;
 		}
+		else if (verifiedHeight > this.#verifiedBlockHeight
+			&& this.#myLastHeight >= this.#yourLastHeight) {
+			let getblocksData = await BlockUtils.getblocksData(this.#task, verifiedHeight);
+			this._getblocks(verifiedHeight, getblocksData);
+		}
 		this.#verifiedBlockHash = verifiedBlock.hash;
 		this.#verifiedBlockHeight = verifiedHeight;
-		if ((typeof lastHeight !== 'number' || lastHeight < 1)
-			&& verifiedHeight > this.#yourLastHeight) {
-			// Temporarily
-			this.#yourLastHeight = verifiedHeight;
-		}
-		else if (lastHeight > this.#yourLastHeight) {
+		if (lastHeight > this.#yourLastHeight) {
 			this.#yourLastHeight = lastHeight;
 		}
 
 		if (this.#flagLockBlockSync || this.#flagBlockInSync) {
 			return;
 		}
-		if (this.#myLastHeight > this.#yourLastHeight) {
+		else if (this.#myLastHeight > this.#yourLastHeight) {
 			if (this.#yourLastHeight !== verifiedHeight) {
 				await this.#sendBlockInv(verifiedHeight + 1, this.#myLastHeight, this.#yourLastHeight + 1);
 			}
@@ -541,7 +542,7 @@ class Peer {
 				blockHash: inv.notfound['2'].slice(0)
 			});
 		}
-		else if (topHeight > this.#yourLastHeight && topHeightBlock) {
+		else if (knownBlocks > 0 && topHeight >= this.#yourLastHeight && topHeightBlock) {
 			this.#yourLastHeight = topHeight;
 			this.#verifiedBlockHeight = topHeight;
 			this.#verifiedBlockHash = topHeightBlock.hash;
@@ -569,36 +570,28 @@ class Peer {
 	#setBlockSyncTimeout() {
 		clearTimeout(this.#blockSyncTimeout);
 		let lastCommandTime = this.networkStatus.time.lastCommand;
-		let timeoutProcess = () => {
-			console.log('sync block timeout');
-			if (this.#blockDataQueue) {
-				this.#blockDataQueue.stop();
-				this.#blockDataQueue = undefined;
-			}
-			this.#blockSyncFinish(true);
-			this.#error();
-		}
 		let timeoutCb = () => {
 			let nowTime = this.networkStatus.time;
 			if (nowTime.lastCommand === lastCommandTime
-				&& nowTime.lastComm + SyncBlockTimeout > Date.now()) {
+				&& nowTime.lastComm + SyncBlockTimeout >= Date.now()) {
 				this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
 				return;
 			}
 
-			if (!this.#syncBlockAckMode) {
-				timeoutProcess();
+			if (++this.#blockSyncTimeoutCount > 4) {
+				console.log(`${this.ip}:${this.port} Error when syncing blocks`);
+				if (this.#blockDataQueue) {
+					this.#blockDataQueue.stop();
+					this.#blockDataQueue = undefined;
+				}
+				this.#blockSyncFinish(true);
+				this.disconnect(true);
 			}
 			else {
-				this.#blockSyncTimeoutCount++;
-				if (this.#blockSyncTimeoutCount >= 5) {
-					timeoutProcess();
-				}
-				else {
-					this._blockack(Buffer.alloc(4));
-					lastCommandTime = nowTime.lastComm;
-					this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
-				}
+				console.log(`${this.ip}:${this.port} Timeout when syncing blocks`);
+				this._blockack(Buffer.alloc(4));
+				lastCommandTime = nowTime.lastComm;
+				this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
 			}
 		}
 		this.#blockSyncTimeout = setTimeout(timeoutCb, SyncBlockTimeout);
@@ -612,10 +605,11 @@ class Peer {
 		let blocksData = data.blockHash;
 		if (!Buffer.isBuffer(knownLastHash) || typeof knownLastHeight !== 'number'
 			|| !Array.isArray(blocksData) || blocksData.length < 1) return false;
+
 		if (this.#myLastHeight > this.#verifiedBlockHeight
 			&& blocksData.length + knownLastHeight > this.#myLastHeight) {
 			this.#flagForkReady = true;
-			console.log(`fork from ${this.#verifiedBlockHeight + 1} to ${this.#verifiedBlockHeight + blocksData.length}`);
+			console.log(`${this.ip}:${this.port} fork from ${this.#verifiedBlockHeight + 1} to ${this.#verifiedBlockHeight + blocksData.length}`);
 			this.#blockDataQueue = new BlockDataQueue(
 				blocksData.length,
 				async (blockData) => {
@@ -646,7 +640,7 @@ class Peer {
 			)
 		}
 		else if (blocksData.length > 1) {
-			console.log(`sync blocks from ${this.#myLastHeight + 1} to ${this.#myLastHeight + blocksData.length}`);
+			console.log(`${this.ip}:${this.port} sync blocks from ${this.#myLastHeight + 1} to ${this.#myLastHeight + blocksData.length}`);
 			this.#blockDataQueue = this.#task.newAddBlockTask(
 				blocksData.length,
 				this.#blockSyncFinish.bind(this)
@@ -738,7 +732,7 @@ class Peer {
 	}
 
 	async #blockackProcess(hash: Buffer) {
-		let sent = false;
+		let isSent = false;
 		for (let i = 0; i < this.#sendBlockQueue.length; i++) {
 			if (!this.#sendBlockQueue[i] || hash.equals(this.#sendBlockQueue[i])) {
 				if (i === 0) {
@@ -749,11 +743,11 @@ class Peer {
 					this.#sendBlockQueue[i] = undefined;
 				}
 			}
-			else if (!sent) {
+			else if (!isSent) {
 				let block = this.#task.getBlockDataByHash(this.#sendBlockQueue[i]);
 				if (block) {
 					this._block(block);
-					sent = true;
+					isSent = true;
 				}
 			}
 		}
@@ -773,22 +767,12 @@ class Peer {
 		}
 		let blocks = getdata.block;
 		if (Array.isArray(blocks) && blocks.length > 0) {
-			if (this.#syncBlockAckMode) {
-				this.#sendBlockQueue = blocks;
-				for (let i = 0; i < blocks.length; i++) {
-					let blockData = await this.#task.getBlockDataByHash(blocks[i]);
-					if (blockData) {
-						this._block(blockData);
-						break;
-					}
-				}
-			}
-			else {
-				for (let i = 0; i < blocks.length; i++) {
-					let blockData = await this.#task.getBlockDataByHash(blocks[i]);
-					if (blockData) {
-						this._block(blockData);
-					}
+			this.#sendBlockQueue = blocks;
+			for (let i = 0; i < blocks.length; i++) {
+				let blockData = await this.#task.getBlockDataByHash(blocks[i]);
+				if (blockData) {
+					this._block(blockData);
+					break;
 				}
 			}
 		}
@@ -810,11 +794,9 @@ class Peer {
 
 	async resyncAfterNewBlock(getblocksData: Buffer[], isFork?: boolean) {
 		if (this.#myLastHeight > this.#yourLastHeight) {
-			if (isFork) {
-				let blocksData = await BlockUtils.getblocksData(this.#task, this.#yourLastHeight);
-				this._getblocks(this.#yourLastHeight, blocksData);
-			}
-			else {
+			let blocksData = await BlockUtils.getblocksData(this.#task, this.#yourLastHeight);
+			this._getblocks(this.#yourLastHeight, blocksData);
+			if (!isFork) {
 				await this.#sendBlockInv(this.#verifiedBlockHeight + 1, this.#myLastHeight);
 			}
 		}

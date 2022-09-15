@@ -1,6 +1,7 @@
 import { WalletCli } from '../wallet/walletCli';
 import { walletConfigValidate } from './configValidate';
 import path from 'path';
+import { Wallet } from '../wallet/wallet';
 
 const defaultWalletConfig = {
 	rpcOpt: {
@@ -43,9 +44,13 @@ function init(config, rpcOnly = false) {
 		}
 	}
 
-	let walletCli = new WalletCli(config.rpcOpt, config.walletDataPath, { jsonSpace: config.jsonSpace, jsonColor: config.jsonColor, addressBs58ck: config.addressBs58ck }, rpcOnly);
+	let wallet;
+	if (!rpcOnly) {
+		wallet = new Wallet(config.walletDataPath);
+	}
+	let walletCli = new WalletCli(config.rpcOpt, wallet, { jsonSpace: config.jsonSpace, jsonColor: config.jsonColor,  jsonTable: config.jsonTable, addressBs58ck: config.addressBs58ck }, rpcOnly);
 
-	walletCli.init();
+	walletCli.init(true);
 
 	process.on('exit', exitHandler.bind(null, walletCli));
 	process.on('SIGINT', exitHandler.bind(null, walletCli));

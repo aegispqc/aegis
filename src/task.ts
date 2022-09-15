@@ -5,7 +5,7 @@ import { minerController } from "./miner/minerController";
 import BlockDataQueue from "./blockchain/blockDataQueue";
 import { BlockForkVerify } from "./blockchain/blockFrokVerify";
 import BlockHeader from "./blockchain/blockHeader";
-import { delay, testMinerAsync } from "./blockchain/util";
+import { delay, objectIsEmpty, testMinerAsync } from "./blockchain/util";
 import { BlockDataFormat } from "./db/lmdb/blockchainDb";
 import { WalletHistoryDb } from "./wallet/walletHistoryDb";
 import { CacheData, CacheDataJson, CacheTx } from "./blockchain/cacheTx";
@@ -67,6 +67,13 @@ class Task {
 	async init(): Promise<boolean> {
 		if (this.walletHistory) {
 			await this.walletHistory.init();
+			if (!this.walletHistory.checkVersion()) {
+				console.log('An old version of the wallet history has been detected and an automatic upgrade is in progress...');
+				await this.walletHistory.clearHistory();
+				await new Promise(r => this.walletReindex(0, r));
+				await this.walletHistory.updateVersion();
+				console.log('Upgrade complete!');
+			}
 		}
 
 		this.eventEmit.on('newBlock', (m) => {
@@ -80,6 +87,7 @@ class Task {
 		});
 
 		let coreInitR = this.core.init();
+		await this.mc.init();
 		if (!coreInitR) {
 			if (GB) {
 				console.log('Genesis is not found, so create.');
@@ -92,7 +100,6 @@ class Task {
 				return r;
 			}
 		}
-		await this.mc.init();
 		return true;
 	}
 
@@ -160,8 +167,8 @@ class Task {
 		return this.core.blockHashDoesExist(...input);
 	}
 
-	createNewTransation(...input: Parameters<Core['createNewTransation']>) {
-		return this.core.createNewTransation(...input);
+	createTransation(...input: Parameters<Core['createTransation']>) {
+		return this.core.createTransation(...input);
 	}
 
 	txValidator(...input: Parameters<Core['txValidator']>) {
@@ -251,10 +258,20 @@ class Task {
 					continue;
 				}
 				allLastHashs.push(...lastHashs);
-				for (let k = 0; k < lastHashs.length; k++) {
-					let tx = this.walletHistory.checkTx(lastHashs[k].hash, lastHashs[k].voutn)
+				if (!lastHashs[0]) {
+					continue
+				}
+				let tx = this.walletHistory.checkTxInput(lastHashs[0].hash, lastHashs[0].voutn)
+				if (tx) {
+					if (!address[tx.address]) {
+						address[tx.address] = { sendValue: 0n, receiveValue: 0n };
+					}
+					address[tx.address].sendValue += tx.value;
+				}
+				for (let k = 1; k < lastHashs.length; k++) {
+					let tx = this.walletHistory.checkTxInput(lastHashs[k].hash, lastHashs[k].voutn)
 					if (tx) {
-						address[tx.address] = true;
+						address[tx.address].sendValue += tx.value;
 					}
 				}
 			}
@@ -268,7 +285,11 @@ class Task {
 				addr = addr.toString('hex');
 				let watchAddr = this.walletHistory.getWatchAddresses();
 				if (watchAddr && watchAddr[addr]) {
-					address[addr] = true;
+					// address[addr] = true;
+					if (!address[addr]) {
+						address[addr] = { sendValue: 0n, receiveValue: 0n };
+					}
+					address[addr].receiveValue += blockTx.vout[j].value;
 				}
 			}
 
@@ -368,7 +389,7 @@ class Task {
 		this.core.init();
 		this.cacheTx.deleteTxsByHashs(Object.keys(blockData.txids));
 		this.cacheTx.freeCacheTxTimeOut();
-		this.updateWalletByBlockHash(hash); //not wait 
+		this.updateWalletByBlockHash(hash);
 		this.mc.stopFind();
 		this.eventEmit.emit('newBlock', hash);
 		return { data: hash };
@@ -476,12 +497,10 @@ class Task {
 			}
 
 			if (this.walletHistory) {
-				// this.walletHistory.recheckUTXOAll();
 				this.walletHistory.recheckUTXO(voutspentRetraction);
 				this.walletReindex(startHeight);
 			}
 
-			// return startHeight;
 			return { startHeight, endHeight, blockHashList: forkBlockHashList };
 		});
 
@@ -508,6 +527,11 @@ class Task {
 		}
 		else {
 			if (this.mc.minerRunFlag) {
+				console.log('miner already start!!');
+				return;
+			}
+			if (!this.mc.minerBinHashCheck) {
+				console.log('minerBinHash was change!');
 				return;
 			}
 			console.log('miner start!!');
@@ -612,10 +636,6 @@ class Task {
 		}
 
 		let headerRaw = this.core.miningBlock.blockHeader.raw.toString('hex');
-		// let txids = [];
-		// for (let i = 0; i < this.core.miningBlock.txs.length; i++) {
-		// 	txids.push(this.core.miningBlock.txs[i].txid);
-		// }
 		let nktp = this.core.miningBlock.getMerkleTreeOnlyCoinBase();
 
 		if (!nktp) {
@@ -702,11 +722,9 @@ class Task {
 		if (cache) {
 			return true;
 		}
-
 		if (this.core.miningBlock && this.core.miningBlock.lastVoutIsExist(hash, n)) {
 			return true;
 		}
-
 		return false;
 	}
 
@@ -746,18 +764,14 @@ class Task {
 		if (!this.walletHistory || this.walletHistory.watchAddressIsEmpty) {
 			return false;
 		}
-
-		let blockHeader = new BlockHeader(block.header); //ooxx
-
+		let blockHeader = new BlockHeader(block.header);
 		for (let i = 0; i < block.txs.length; i++) {
 			let blockTx = BlockTx.serializeToClass(block.txs[i]);
 			if (!blockTx) {
 				continue;
 			}
-
 			await this.updateWalletByTx(blockTx, block.height, blockHeader.getTime(), i);
 		}
-
 		await this.walletHistory.setUpdateHeight(block.height);
 	}
 
@@ -773,7 +787,6 @@ class Task {
 		if (!this.walletHistory || this.walletHistory.watchAddressIsEmpty) {
 			return false;
 		}
-
 		await this.walletHistory.addTx(blockTx, height, time, txn);
 	}
 
@@ -814,46 +827,47 @@ class Task {
 	 * @param {number} startHeight Reindex start height.
 	 * @returns Whether to complete.
 	 */
-	async walletReindex(startHeight?: number): Promise<boolean> {
+	walletReindex(startHeight?: number, finishCB = (endHeight) => { }): boolean {
 		if (!this.walletHistory) {
+			finishCB(-1);
 			return false;
 		}
-
 		if (startHeight < 0) {
 			this.walletHistory.reindexFlag = false;
+			finishCB(-1);
 			return true;
 		}
-
 		if (this.walletHistory.reindexFlag) {
+			finishCB(-1);
 			return false;
 		}
-
 		if (startHeight === undefined) {
 			startHeight = this.walletHistory.getUpdatedHeight();
 		}
 
+		if (objectIsEmpty(this.walletHistory.getWatchAddresses())) {
+			finishCB(-1);
+			return true;
+		}
 		this.walletHistory.reindexFlag = true;
-		console.log(`walletReindex START! height: ${startHeight}`, new Date(Date.now()));
-
 		(async () => {
+			console.log(`Start re-indexing wallets. height: ${startHeight}`, new Date(Date.now()));
 			do {
 				let block = this.getBlockDataByHeight(startHeight);
 				if (!block) {
 					this.walletHistory.reindexFlag = false;
-					console.log(`walletReindex FINISH! height: ${startHeight - 1}`, new Date(Date.now()));
-					return;
+					console.log(`Wallet indexing completed! height: ${startHeight - 1}`, new Date(Date.now()));
+					return finishCB(startHeight - 1);
 				}
-
 				await this.updateWalletByBlock(block);
-
 				startHeight++;
 				if (startHeight % 100 === 0) {
-					console.log(`walletReindex progress: ${startHeight} / ${this.core.nowHeight}`);
+					console.log(`Re-indexing progress: ${startHeight} / ${this.core.nowHeight}`);
 				}
 
 			} while (this.walletHistory.reindexFlag);
-
-			console.log(`walletReindex STOP! height: ${startHeight - 1}`, new Date(Date.now()));
+			console.log(`Stop re-indexing wallets. height: ${startHeight - 1}`, new Date(Date.now()));
+			finishCB(startHeight - 1);
 		})();
 
 		return true;
@@ -891,9 +905,10 @@ class Task {
 	 * @param {bigint} value send amount of coin.
 	 * @param {bigint} extraValue Amount reserved for fee.
 	 * @param {bigint} feeRatio Fee ratio. Do not less than 1.
+	 * @param {boolean} useAllUTXO Use all UTXO
 	 * @returns {false|BlockTx} Whether to complete.
 	 */
-	async walletCreateNewTransation(srcAddress: string, tgtAddress: string, value: bigint, extraValue: bigint = 0n, feeRatio: bigint = 1n): Promise<false | { inValue: bigint, blockTx: BlockTx }> {
+	async walletCreateTransation(srcAddress: string, tgtAddress: string, value: bigint, extraValue: bigint = 0n, feeRatio: bigint = 1n, useAllUTXO: boolean = false): Promise<false | { inValue: bigint, blockTx: BlockTx }> {
 		if (!this.walletHistory) {
 			return false;
 		}
@@ -903,7 +918,7 @@ class Task {
 		}
 
 		let lastvout: any = await this.taskQueue.addTask(async () => {
-			return await this.walletHistory.createNewTx(srcAddress, value, extraValue, feeRatio, this.poolLastVoutIsExist.bind(this));
+			return await this.walletHistory.createNewTx(srcAddress, value, extraValue, 2, feeRatio, useAllUTXO, this.poolLastVoutIsExist.bind(this));
 		});
 		if (lastvout.taskErr || !lastvout.data) {
 			return false;
@@ -921,10 +936,62 @@ class Task {
 				value: value
 			}
 		];
-		let changeAddress = Buffer.from(srcAddress, 'hex');
-
-		let r = await this.core.createNewTransation(vin, vout, changeAddress, undefined, true);
+		let r = await this.core.createTransation(vin, vout, undefined, true);
 		return r;
+	}
+
+	/**
+	 * Create new transation.
+	 * @param {string} srcAddress Send address.
+	 * @param {string} tgtAddress Target address.
+	 * @param {bigint} value send amount of coin.
+	 * @param {bigint} extraValue Amount reserved for fee.
+	 * @param {bigint} feeRatio Fee ratio. Do not less than 1.
+	 * @param {boolean} useAllUTXO Use all UTXO
+	 * @returns {false|BlockTx} Whether to complete.
+	 */
+	async walletCreateAdvancedTransation(srcAddress: string, target: { address: string, value: bigint }[] | bigint, extraValue: bigint = 0n, feeRatio: bigint = 1n, useAllUTXO: boolean = false): Promise<false | { inValue: bigint, blockTx: BlockTx }> {
+		if (!this.walletHistory) {
+			return false;
+		}
+		if (this.walletHistory.reindexFlag) {
+			return false;
+		}
+		// find utxo (lastvout)
+		if (typeof target == 'bigint') {
+			let lastvout: any = await this.taskQueue.addTask(async () => {
+				return await this.walletHistory.createNewTx(srcAddress, target, extraValue, 0, feeRatio, useAllUTXO, this.poolLastVoutIsExist.bind(this));
+			});
+			if (lastvout.taskErr || !lastvout.data) {
+				return false;
+			}
+			lastvout = lastvout.data;
+			lastvout.forEach(x => {
+				x.txid = Buffer.from(x.txid, 'hex');
+			});
+			let vin = [lastvout];
+			let vout = [];
+			let r = await this.core.createTransation(vin, vout, undefined, true);
+			return r;
+		}
+		else {
+			let targetAmount = target.length;
+			let totalValue = target.reduce((a, { value }) => a + value, 0n);
+			let lastvout: any = await this.taskQueue.addTask(async () => {
+				return await this.walletHistory.createNewTx(srcAddress, totalValue, extraValue, targetAmount + 1, feeRatio, useAllUTXO, this.poolLastVoutIsExist.bind(this));
+			});
+			if (lastvout.taskErr || !lastvout.data) {
+				return false;
+			}
+			lastvout = lastvout.data;
+			lastvout.forEach(x => {
+				x.txid = Buffer.from(x.txid, 'hex');
+			});
+			let vin = [lastvout];
+			let vout = target.map(({ address, value }) => ({ address: Buffer.from(address, 'hex'), value }));
+			let r = await this.core.createTransation(vin, vout, undefined, true);
+			return r;
+		}
 	}
 
 	/**
@@ -936,63 +1003,51 @@ class Task {
 	 * @param {boolean} opt.reverse Sort Reverse.
 	 * @returns {false|object} Whether to complete.
 	 */
-	async walletGetTxList(address: string, opt: { limit?: number, skip?: number, reverse?: boolean }) {
+	async walletGetTxList(address: string, opt: { limit?: number, skip?: number, reverse?: boolean }, normalFlag?: Boolean) {
 		if (!this.walletHistory) {
 			return false;
 		}
-
 		let txList: any = await this.taskQueue.addTask(async () => {
-			return await this.walletHistory.getTxList(address, opt);
+			return (normalFlag) ? await this.walletHistory.getNormalTxList(address, opt) : await this.walletHistory.getTxList(address, opt);
 		});
 		if (txList.taskErr || !txList.data) {
 			return false;
 		}
 		txList = txList.data;
-
 		let waitTx = [];
 		let mining = [];
-		let addressBuf = Buffer.from(address, 'hex');
 
 		this.cacheTx.getTxList(true).forEach((x: CacheData) => {
 			if (!x.address || !x.address[address]) {
 				return;
 			}
-
-			let vout = x.blockTx.getTxOutValues();
-			vout.forEach((y, i) => {
-				if (y.address && addressBuf.equals(y.address)) {
-					waitTx.push({
-						address,
-						txid: x.hash,
-						voutn: i,
-						type: 'receive',
-						value: y.value,
-						feeRatio: x.feeRatio
-					});
-				}
+			waitTx.push({
+				address,
+				txid: x.hash,
+				value: {
+					sendValue: x.address[address].sendValue,
+					receiveValue: x.address[address].receiveValue
+				},
+				time: x.time,
+				feeRatio: x.feeRatio
 			});
 		});
 
-		this.cacheTx.getMiningTxList(true).filter((x: CacheData) => {
+		this.cacheTx.getMiningTxList(true).forEach((x: CacheData) => {
 			if (!x.address || !x.address[address]) {
 				return;
 			}
-
-			let vout = x.blockTx.getTxOutValues();
-			vout.forEach((y, i) => {
-				if (y.address && addressBuf.equals(y.address)) {
-					mining.push({
-						address,
-						txid: x.hash,
-						voutn: i,
-						type: 'receive',
-						value: y.value,
-						feeRatio: x.feeRatio
-					});
-				}
+			mining.push({
+				address,
+				txid: x.hash,
+				value: {
+					sendValue: x.address[address].sendValue,
+					receiveValue: x.address[address].receiveValue
+				},
+				time: x.time,
+				feeRatio: x.feeRatio
 			});
 		});
-
 		return { waitTx, mining, txList };
 	}
 
@@ -1009,7 +1064,6 @@ class Task {
 		if (!this.walletHistory) {
 			return false;
 		}
-
 		let txList: any = await this.taskQueue.addTask(async () => {
 			let utxoList = await this.walletHistory.getUTXOList(address, opt);
 			if (!utxoList) {
@@ -1032,7 +1086,6 @@ class Task {
 			return false;
 		}
 		txList = txList.data;
-
 		return txList;
 	}
 
@@ -1044,9 +1097,7 @@ class Task {
 			return false;
 		}
 		balance = balance.data;
-
 		let r = { confirmed: balance, unconfirmed: 0n };
-
 		let addressBuf = Buffer.from(address, 'hex');
 
 		let cacheTx = <CacheData[]>this.cacheTx.getTxList(true);
@@ -1072,7 +1123,6 @@ class Task {
 				});
 			}
 		});
-
 		return r;
 	}
 
@@ -1080,7 +1130,6 @@ class Task {
 		if (!this.walletHistory) {
 			return { error: 'Wallet db is not found!' };
 		}
-
 		if (Array.isArray(address)) {
 			let total: any = { confirmed: 0n, unconfirmed: 0n };
 			let sub = {};
@@ -1094,7 +1143,6 @@ class Task {
 				total.unconfirmed += r.unconfirmed;
 				sub[address[i]] = r;
 			}
-
 			return { sub, total };
 		}
 
@@ -1102,7 +1150,6 @@ class Task {
 		if (!r) {
 			return { error: `address (${address}) is not found. Try running walletAutoWatch.` };
 		}
-
 		return { confirmed: r.confirmed, unconfirmed: r.unconfirmed };
 	}
 

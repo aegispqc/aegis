@@ -5,6 +5,7 @@ import os from 'os';
 import { equationsOffset } from "../blockchain/pow";
 import { MQPHash } from "../crypto/MQPHash";
 import { Mine } from "./mine";
+import { shake256 } from '../crypto/hash';
 
 
 const maxN = 63; //If bigger then fix it.
@@ -26,6 +27,8 @@ class minerController {
 	private _numOfVariables: number;
 
 	public minerBinPath: string;
+	public minerBinHash: Buffer;
+	public minerBinHashCheck: boolean;
 	public get fixNumber(): number { return this._fixNumber; }
 
 	public get minerRunFlag(): boolean { return this._minerRunFlag; }
@@ -39,7 +42,9 @@ class minerController {
 		this.cudaRunning = [];
 		this._minerRunFlag = false;
 		this._interruptFlag = true;
-		this.minerBinPath = null;
+		this.minerBinPath = undefined;
+		this.minerBinHash = undefined;
+		this.minerBinHashCheck = false;
 	}
 
 	async init() {
@@ -48,24 +53,42 @@ class minerController {
 		switch (os.platform()) {
 			case 'linux':
 				this.minerBinPath = path.join(minerBinDir, '/mine');
+				this.minerBinHash = Buffer.from("123aa6ab9fbba1477af5e73f70ec8c082719139e592b9d5451d0de143559ee0d", "hex");
 				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mine');
 				break;
 			case 'win32':
 				this.minerBinPath = path.join(minerBinDir, '/mineWin32.exe');
+				this.minerBinHash = Buffer.from("5bf7ff13bb8420272991d5acd626eae239139c87809db3e1452865d2945e0ced", "hex");
 				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mineWin32.exe');
 				break;
 			default:
 				console.error("unkow os!")
 				this.minerBinPath = undefined;
+				this.minerBinHash = undefined;
 				return;
+		}
+		
+		try {
+			await fs.mkdir(minerBinDir);
+		} catch (err) {
+			if (err.code !== 'EEXIST') {
+				console.error(`'${minerBinDir}' mkdir failed!`);
+			}
 		}
 
 		try {
-			await fs.access(this.minerBinPath, constants.R_OK);
+			await fs.access(this.minerBinPath, constants.X_OK);
 		} catch {
 			let minerBin = await fs.readFile(minerBinPathSnapshot);
-			await fs.mkdir(minerBinDir);
-			await fs.writeFile(this.minerBinPath, minerBin);
+			await fs.writeFile(this.minerBinPath, minerBin, {mode: 0o777});
+		}
+		try {
+			let minerBin = await fs.readFile(this.minerBinPath);
+			let mbSha = shake256(minerBin);
+			this.minerBinHashCheck = mbSha.equals(this.minerBinHash);
+			console.log('minerBin Hash Check:', this.minerBinHashCheck);
+		} catch (error) {
+			console.log(error);
 		}
 	}
 

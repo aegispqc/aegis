@@ -5,6 +5,12 @@ import {
 	Option, CallbackOption, p2pMessageObject
 } from '../lib/interface';
 
+var packageJson = {
+	version: '0.0.0'
+};
+try {
+	packageJson = require('../../../package.json');
+} catch (e) { }
 import { Queue } from '../utils/queue';
 import { BufferQueue } from './utils/bufferQueue';
 import { Task } from '../../task';
@@ -69,6 +75,7 @@ export default class Message {
 	#netErrorCount: number;
 	#yourVersionTmp: Option;
 	#yourServices: bigint;
+	#yourSubVersion: string;
 	#myServices: bigint;
 	#serviceFullNode: boolean;
 	#sendMessageQueue: Queue;
@@ -144,14 +151,15 @@ export default class Message {
 			},
 			version: (payload: any) => {
 				if (!payload) {
-					return this.networkError();
+					return this.networkError(true);
 				}
 				let verify = this.#verifyVersion(payload);
 				if (!verify) {
-					return this.networkError();
+					return this.networkError(true);
 				}
 				this.#yourVersionTmp = payload;
 				this.#yourServices = payload.services;
+				this.#yourSubVersion = payload.subVersion;
 				this.#verack();
 				this.#flagGetVersion = true;
 				this.#flagSendVerack = true;
@@ -416,6 +424,7 @@ export default class Message {
 		if (!versionData || typeof versionData !== 'object') return;
 		this.#flagSendVersion = true;
 		versionData.services = this.#myServices;
+		versionData.subVersion = packageJson.version;
 		this.#priorityCmd('version', versionData);
 
 		if (!this.#handShakeTimeout) {
@@ -452,6 +461,7 @@ export default class Message {
 			servicesData: {
 				fullNode: this.#serviceFullNode
 			},
+			subVersion: this.#yourSubVersion,
 			errorCount: this.errorCount
 		}
 	}

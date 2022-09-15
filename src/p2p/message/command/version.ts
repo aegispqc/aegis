@@ -16,8 +16,8 @@ import BufferReader from '../utils/bufferReader';
  * 8	timestamp		uint64_t	standard UNIX timestamp in seconds.
  * 26	addr_recv		net_addr	The network address of the node receiving this message.
  * 26	addr_from		net_addr	Field can be ignored. This used to be the network address of the node emitting this message, but most P2P implementations send 26 dummy bytes. The "services" field of the address would also be redundant with the second field of the version message.
- * 8	nonce			uint64_t	Node random nonce, randomly generated every time a version packet is sent. This nonce is used to detect connections to self.
  * 32	user_id			uint32_t	User random id.
+ * ?    user_agent      var_str     AEGIS core version.
  * 4	start_height	uint32_t	The last block received by the emitting node.
  * 1	relay			bool		Whether the remote peer should announce relayed transactions or not.
  */
@@ -37,8 +37,16 @@ export default class Version extends protoMessage {
 		let timestamp = br.uint64();
 		let addrRecv = br.netAddr();
 		let addrFrom = br.netAddr();
-		let nonce = br.custom(8);
-		let uid = (br.custom(32)).toString('hex');
+		let uid = '';
+		let subVersion = '0.0.0';
+		if (version < 2) {
+			let nonce = br.custom(8);
+			uid = (br.custom(32)).toString('hex');
+		}
+		else {
+			uid = br.custom(32).toString('hex');
+			subVersion = br.varStr();
+		}
 		let startHeight = br.uint32();
 		let relay;
 		if (br.isEnd()) {
@@ -49,8 +57,8 @@ export default class Version extends protoMessage {
 		}
 		return {
 			version, services, timestamp,
-			addrRecv, addrFrom, nonce,
-			uid, startHeight, relay
+			addrRecv, addrFrom, uid,
+			subVersion, startHeight, relay
 		}
 	}
 
@@ -73,6 +81,7 @@ export default class Version extends protoMessage {
 		let fromPort = 0;
 		let lastHeight = typeof payloadMessage.height !== 'number' ? 0 : payloadMessage.height;
 		let uid = Buffer.isBuffer(payloadMessage?.uid) ? payloadMessage.uid : NetworkUtils.createUid();
+		let subVersion = typeof payloadMessage.subVersion !== 'string' ? '0.0.0' : payloadMessage.subVersion;
 		let services = payloadMessage.services;
 		let relay = payloadMessage?.relay === false ? 0 : 1;
 		if (typeof payloadMessage?.recv === 'object') {
@@ -108,10 +117,12 @@ export default class Version extends protoMessage {
 			fromIp,
 			fromPort
 		);
-		// nonce
-		bw.custom(NetworkUtils.createNonce(8));
-		// user_id
+		// nonce -> user_id  
 		bw.custom(uid);
+		// user_id -> sub-version
+		// next version /X.X.X/ -> /AEGIS:X.X.X/
+		bw.varStr(`/${subVersion}/`);  // subVersion length only 7
+		// bw.varStr(`/AEGIS:${subVersion}/`);  // next version
 		// last_height
 		bw.uint32(lastHeight);
 		// relay

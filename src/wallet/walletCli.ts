@@ -3,20 +3,20 @@ import * as readline from 'node:readline';
 import { stdin, stdout } from 'process';
 import { Wallet } from './wallet';
 import { BlockTx } from '../core';
-import { getSignSys, getSignSysAll } from '../blockchain/signType';
+import { getSignSysAll } from '../blockchain/signType';
 import { getCompactSizeBufferByNumber } from '../blockchain/util';
-import { methodParamsType, methodParamsTypeBigIntFloat, jsonReplacer } from './cliArg';
+import { methodParamsType, methodParamsTypeBigIntFloat, jsonReplacer, checkAddressIsBs58ck, chAddress } from './cliArg';
 import bs58ck from '../crypto/bs58ck';
 import methodParamssHelp from './walletStr';
 import { PostRequest } from './postRequest';
 import { shake256 } from '../crypto/hash';
-import { rlQuestion } from '../indexUtil/util'
+import { rlQuestion, printMsg } from '../indexUtil/util'
 import { deserialize, serialize } from 'bson';
 import { jsonParse, jsonStringify } from '../api/json';
-import path from 'path';
 import { SafePasswordBuf } from '../crypto/safePassword';
 import { bigIntToFloatString, floatToPercentage } from '../api/type';
-import { OpReturn } from '../blockchain/blockTx';
+import { OpReturn, Vout } from '../blockchain/blockTx';
+import { getTableStr } from './util';
 
 const colorize = require('json-colorizer');
 
@@ -30,8 +30,9 @@ type rpcOpt = {
 }
 
 type cliReturn = {
-	error?: any,
-	result?: any
+	error?: any;
+	result?: any;
+	tableStr?: any;
 }
 
 const colorOpt = {
@@ -60,15 +61,6 @@ function completer(line) {
 	return [hits && hits.length ? hits : completions, line];
 }
 
-function checkAddressIsBs58ck(address: string) {
-	let ags = address.slice(0, 4);
-	if (ags === 'AGS_') {
-		return true;
-	}
-
-	return false;
-}
-
 function requiredArg(paramName: string = 'argument'): any {
 	throw new Error(`The ${paramName} is required`);
 }
@@ -79,7 +71,6 @@ function requiredArg(paramName: string = 'argument'): any {
  */
 class WalletCli {
 	rpcOpt?: rpcOpt;
-	walletDataPath: string;
 	sendId: number;
 	jsonSpace: boolean;
 	jsonColor: boolean;
@@ -90,26 +81,30 @@ class WalletCli {
 	auth: String;
 	rl: readline.Interface;
 	postRequest: PostRequest;
-	private initFlag: boolean;
 	wallet?: Wallet;
+	additionalInterfaces: any;
 	private _txTemp?: BlockTx;
+	private initFlag: boolean;
+	private jsonTable: boolean;
 
-	constructor(rpcOpt?: rpcOpt, walletDataPath: string = path.join(process.cwd(), './walletFile'), 
-	opt?: { jsonSpace?: boolean, jsonColor?: boolean, addressBs58ck?: boolean, bigIntObjFloatFlag?: boolean },
-	rpcOnly: boolean = false ) {
+	constructor(rpcOpt?: rpcOpt, wallet?: Wallet, opt?: { jsonSpace?: boolean, jsonColor?: boolean, jsonTable: boolean, addressBs58ck?: boolean, bigIntObjFloatFlag?: boolean, additionalInterfaces?: any, rl?: readline.Interface }, rpcOnly: boolean = false) {
 		this.rpcOpt = rpcOpt;
-		this.walletDataPath = walletDataPath;
 		this.sendId = 0;
 		this.jsonSpace = typeof (opt?.jsonSpace) === "boolean" ? opt?.jsonSpace : true;
 		this.jsonColor = typeof (opt?.jsonColor) === "boolean" ? opt?.jsonColor : true;
 		this.addressBs58ck = typeof (opt?.addressBs58ck) === "boolean" ? opt?.addressBs58ck : true;
 		this.bigIntObjFloatFlag = typeof (opt?.bigIntObjFloatFlag) === "boolean" ? opt?.addressBs58ck : true;
 		this.runFlag = false;
-		this.methodParamsType = (this.bigIntObjFloatFlag)? methodParamsTypeBigIntFloat : methodParamsType;
-		this.rl = readline.createInterface(stdin, stdout, completer);
+		this.methodParamsType = (this.bigIntObjFloatFlag) ? methodParamsTypeBigIntFloat : methodParamsType;
+		this.rl = (opt.rl) ? opt.rl : readline.createInterface(stdin, stdout, completer);
 		this.postRequest = new PostRequest(rpcOpt);
-		if(!rpcOnly) {
-			this.wallet = new Wallet(walletDataPath);
+		if (!rpcOnly) {
+			if (wallet) {
+				this.wallet = wallet;
+			}
+			else {
+				this.wallet = new Wallet();
+			}
 		}
 		else {
 			console.log('rpcOnly Mode');
@@ -122,8 +117,10 @@ class WalletCli {
 			this.cliMethod.walletGetAddressList = () => rpcOnlyError;
 			this.cliMethod.walletGetAddressDetails = () => rpcOnlyError;
 			this.cliMethod.walletGetBalance = async () => rpcOnlyError;
-			this.cliMethod.walletCreateNewTransation = async () => rpcOnlyError;
+			this.cliMethod.walletCreateTransation = async () => rpcOnlyError;
+			this.cliMethod.walletCreateAdvancedTransation = async () => rpcOnlyError;
 			this.cliMethod.walletSend = async () => rpcOnlyError;
+			this.cliMethod.walletSendMany = async () => rpcOnlyError;
 			this.cliMethod.walletGetTxList = async () => rpcOnlyError;
 			this.cliMethod.walletGetUTXOList = async () => rpcOnlyError;
 			this.cliMethod.walletAutoWatch = async () => rpcOnlyError;
@@ -133,117 +130,120 @@ class WalletCli {
 			this.cliMethod.checkSignPqcert = async () => rpcOnlyError;
 			this.cliMethod.signTx = async () => rpcOnlyError;
 		}
+		this.additionalInterfaces = (opt.additionalInterfaces) ? opt.additionalInterfaces : undefined;
+		this.jsonTable = (opt.jsonTable === false) ? false : true;
 	}
 
-	async init() {
+	async init(rlFlag?: boolean) {
 		if (this.initFlag) {
 			return;
 		}
 		this.initFlag = true;
-
-		if (!fs.existsSync(this.walletDataPath)) {
-			fs.mkdirSync(this.walletDataPath, { recursive: true });
-		}
-
-		console.log('Wallet cli starts!');
-		this.rl.on('line', async (input: any) => {
-			if (this.runFlag) {
-				return;
-			}
-
-			this.pause();
-			input = input.split(' ');
-
-			//Removing the last space.
-			while (input[input.length - 1].length === 0) {
-				input.pop();
-				if (input.length === 0) {
-					return this.resume();
+		if (rlFlag) {
+			console.log('Wallet cli starts!');
+			this.rl.on('line', async (input: any) => {
+				if (this.runFlag) {
+					return;
 				}
-			}
 
-			//Remove leading space.
-			while (input[0].length === 0) {
-				input = input.slice(1);
-				if (input.length === 0) {
-					return this.resume();
+				this.pause();
+				input = input.split(' ');
+				//Removing the last space.
+				while (input[input.length - 1].length === 0) {
+					input.pop();
+					if (input.length === 0) {
+						return this.resume();
+					}
 				}
-			}
 
-			let method = input[0];
-			let params = input.slice(1);
-
-			if (!this.methodParamsType[method]) {
-				console.log(`ERROR: The method '${method}' is not found`);
-				return this.resume();
-			}
-
-			if (this.methodParamsType[method].length < params.length) {
-				console.log(`ERROR: params is over ${this.methodParamsType[method].length}`);
-				return this.resume();
-			}
-
-			for (let i = 0; i < params.length; i++) {
-				params[i] = this.methodParamsType[method][i](params[i]);
-				if (params[i] === null) {
-					console.log(`ERROR: params[${i}] is error`);
-					return this.resume();
+				//Remove leading space.
+				while (input[0].length === 0) {
+					input = input.slice(1);
+					if (input.length === 0) {
+						return this.resume();
+					}
 				}
-			}
 
-			if (this.cliMethod[method]) {
-				let r
-				try {
-					r = (this.cliMethod[method].constructor.name === "AsyncFunction") ? await this.cliMethod[method].call(this, ...params) : this.cliMethod[method].call(this, ...params);
-				}
-				catch (e) {
-					console.error(`ERROR: ${e}`);
+				let method = input[0];
+				let params = input.slice(1);
+
+				if (!this.methodParamsType[method]) {
+					console.error(`ERROR: The method '${method}' is not found`);
 					return this.resume();
 				}
 
-				if (r.error) {
-					console.error(r.error);
+				if (this.methodParamsType[method].length < params.length) {
+					printMsg(`ERROR: params is over ${this.methodParamsType[method].length}`, true);
 					return this.resume();
 				}
-				if (typeof r.result === 'string') {
-					console.log(r.result);
+
+				for (let i = 0; i < params.length; i++) {
+					params[i] = this.methodParamsType[method][i](params[i]);
+					if (params[i] === null) {
+						console.error(`ERROR: params[${i}] is error`);
+						return this.resume();
+					}
+				}
+
+				if (this.cliMethod[method]) {
+					let r
+					try {
+						r = (this.cliMethod[method].constructor.name === "AsyncFunction") ? await this.cliMethod[method].call(this, ...params) : this.cliMethod[method].call(this, ...params);
+					}
+					catch (e) {
+						console.error('ERROR: ', e);
+						return this.resume();
+					}
+
+					if (r.error) {
+						console.error(r.error);
+						return this.resume();
+					}
+					if (this.jsonTable && r.tableStr) {
+						console.log(r.tableStr);
+					}
+					else if (typeof r.result === 'string') {
+						console.log(r.result);
+					}
+					else {
+						console.log(this.jsonStringify(r.result));
+					}
 				}
 				else {
-					console.log(this.jsonStringify(r.result));
-				}
-			}
-			else {
-				let r = await this.post({ method, params, id: this.sendId });
-				this.sendId++;
+					let r = await this.post({ method, params, id: this.sendId });
+					this.sendId++;
 
-				if (r.err) {
-					console.error('ERROR: ', r.err);
-					return this.resume();
-				}
-
-				try {
-					let obj = jsonParse(r.data);
-					if (obj.error) {
-						console.error('ERROR: ', obj.error);
+					if (r.err) {
+						console.error('ERROR: ', r.err);
 						return this.resume();
 					}
 
-					let json = this.jsonStringify(obj.result);
-					if (!json) {
+					try {
+						let obj = jsonParse(r.data);
+						if (obj.error) {
+							console.error('ERROR: ', obj.error);
+							return this.resume();
+						}
+
+						let json = this.jsonStringify(obj.result);
+						if (!json) {
+							return this.resume();
+						}
+
+						console.log(json);
+
+					}
+					catch (e) {
+						console.error(`ERROR: ${e}`);
 						return this.resume();
 					}
-
-					console.log(json);
-
 				}
-				catch (e) {
-					console.error(`ERROR: ${e}`);
-					return this.resume();
-				}
-			}
 
-			this.resume();
-		});
+				this.resume();
+			});
+		}
+
+		this.postRequest.init();
 	}
 
 	pause() {
@@ -266,9 +266,9 @@ class WalletCli {
 		if (!methodName) {
 			let keysort = (Object.keys(methodParamssHelp)).sort();
 			let r = '------- Help list -------\n';
-			
+
 			for (let i = 0; i < keysort.length; i++) {
-			// for (let x in methodParamssHelp) {
+				// for (let x in methodParamssHelp) {
 				r += `\n${methodParamssHelp[keysort[i]].simple}\n`;
 			}
 			r += '-------------------------\n';
@@ -331,6 +331,11 @@ class WalletCli {
 		return { result: b };
 	}
 
+	setJsonTable(b: boolean) {
+		this.jsonTable = b;
+		return { result: b };
+	}
+
 	/**
 	 * Clear Screen.
 	 */
@@ -352,7 +357,7 @@ class WalletCli {
 				return { result: 'Cancelled. ' };
 			}
 		}
-		
+
 		let label = await rlQuestion(this.rl, 'Enter your label for this wallet: ');
 
 		ans = await rlQuestion(this.rl, 'Encrypt your wallet? (y/n): ');
@@ -371,10 +376,10 @@ class WalletCli {
 		}
 
 		let newWid = await this.wallet.genNewWallet(opt, aesKey, label);
-		if(newWid === false) {
+		if (newWid === false) {
 			return { error: 'Failed to create a new wallet. ' }
 		}
-		
+
 		let originWid = this.wallet.getNowWid();
 		let ansAddAddr = await rlQuestion(this.rl, 'New wallet was generated. Add an address to new wallet? (y/n): ');
 		if (ansAddAddr.match(/^y(es)?$/i)) {
@@ -383,17 +388,17 @@ class WalletCli {
 			}
 			let r = await this.walletAddAddress();
 			this.wallet.switchWallet(originWid);
-			if(r.error) {
+			if (r.error) {
 				console.error(r.error);
 			}
 			console.log(r.result);
 		}
 
-		if(newWid !== 0) {
+		if (newWid !== 0) {
 			let ansSwitchWallet = await rlQuestion(this.rl, `Switch to new wallet(now wallet id:${originWid}, new wallet id:${newWid})?  (y/n): `);
 			if (ansSwitchWallet.match(/^y(es)?$/i)) {
 				let r = this.switchWallet(newWid);
-				if(r.error) {
+				if (r.error) {
 					console.error(r.error);
 				}
 				console.log(r.result);
@@ -410,7 +415,7 @@ class WalletCli {
 	async importWalletFile(walletFilePath: string = requiredArg('walletFilePath')): Promise<cliReturn> {
 		let walletBson = fs.readFileSync(walletFilePath);
 		let walletJson = deserialize(walletBson, { promoteBuffers: true });
-		
+
 		if (walletJson.wallets == undefined || !Array.isArray(walletJson.wallets) || walletJson.wallets.length == 0) {
 			return { error: 'ERROR: Failed to import wallet file!' };
 		}
@@ -424,7 +429,7 @@ class WalletCli {
 			let r = await this.importWalletByJson(aWallet);
 			if (r) {
 				result.push('Done')
-			} 
+			}
 			else {
 				result.push('Fail')
 			}
@@ -435,13 +440,13 @@ class WalletCli {
 
 	async importWalletByJson(walletJson) {
 		let aesKey: SafePasswordBuf;
-		if(walletJson.encryptionFlag) {
+		if (walletJson.encryptionFlag) {
 			let pw = await rlQuestion(this.rl, 'Please enter your password, the password (utf8) you enter will be used as the input of shake256 to generate the key: ', { passwordMode: true });
 			aesKey = new SafePasswordBuf(shake256(Buffer.from(pw)));
 		}
-		
+
 		let r = await this.wallet.importWallet(walletJson, aesKey);
-		if(!r) {
+		if (!r) {
 			return false;
 		}
 
@@ -474,16 +479,16 @@ class WalletCli {
 			exportJson = this.wallet.exportWallet();
 		}
 
-		if(!exportJson) {
+		if (!exportJson) {
 			return { error: 'ERROR: exportWallet failed!' };
 		}
-		
+
 		let bsonData = serialize(exportJson);
-		if(!bsonData) {
+		if (!bsonData) {
 			return { error: 'ERROR: exportWallet bsonData failed!' };
 		}
 		fs.writeFileSync(fname, bsonData);
-		
+
 		return { result: `Exporting wallet file succeeded: ${fname}` };
 	}
 
@@ -536,12 +541,14 @@ class WalletCli {
 			let level = 2;
 			let fakeAmount = 1;
 			let shuffleFlag = false;
-			console.log('-------------- New address Parameters --------------'.padEnd(process.stdout.columns, '-'));
-			console.log(`Signatrue\t: ${Signatures.join(', ')}`);
-			console.log(`Level	\t: ${level}`);
-			console.log(`Fake amount\t: ${fakeAmount}`);
-			console.log(`Shuffle  \t: ${shuffleFlag}`);
-			console.log('------------------ Parameters end ------------------'.padEnd(process.stdout.columns, '-'));
+
+			let parameterTableData: any = {};
+			parameterTableData['Signatrue'] = Signatures.join(', ');
+			parameterTableData['Level'] = level;
+			parameterTableData['Fake amount'] = fakeAmount;
+			parameterTableData['Shuffle'] = shuffleFlag;
+			console.log('New address Parameters: ');
+			console.log(getTableStr(parameterTableData, undefined, { index: 'R', value: 'L' }));
 			ans = await rlQuestion(this.rl, 'Above are the parameters of the new address, please confirm and generate? (y/n): ');
 
 			if (!ans.match(/^y(es)?$/i)) {
@@ -567,7 +574,7 @@ class WalletCli {
 				pkhs = numOfpkhs;
 			}
 			else {
-				let qusStr = `Which of the following ${numOfpkhs} signature systems you would like to choose for your signature: (FAKE is not an option)\n`;
+				let qusStr = `Which of the following ${numOfpkhs} signature systems you would like to choose for your signature: \n`;
 				for (let x in kps) {
 					qusStr += ` ${kps[x].signType}) ${kps[x].signSysName}\n`;
 				}
@@ -580,9 +587,9 @@ class WalletCli {
 				pkhs = orderAns.map((x: string) => parseInt(x));
 			}
 
-			let ansLv = await rlQuestion(this.rl, `Level? (number >= 2, number <= ${numOfSign}): `, { defultMsg: '2' });
+			let ansLv = await rlQuestion(this.rl, `Level? (number >= 2, number <= ${numOfSign}): `);
 			let level = parseInt(ansLv);
-			if (level < 2 || Number.isNaN(level)) {
+			if (level < 2 || Number.isNaN(level) || level > numOfSign) {
 				return { error: 'ERROR: Level input error.' };
 			}
 
@@ -609,12 +616,13 @@ class WalletCli {
 				}
 			}
 
-			console.log('-------------- New address Parameters --------------'.padEnd(process.stdout.columns, '-'));
-			console.log(`Signatrue\t: ${typeof pkhs !== 'number' ? Signatures.join(', ') : pkhs}`);
-			console.log(`Level	\t: ${level}`);
-			console.log(`Fake amount\t: ${fakeAmount}`);
-			console.log(`Shuffle  \t: ${shuffleFlag}`);
-			console.log('------------------ Parameters end ------------------'.padEnd(process.stdout.columns, '-'));
+			let parameterTableData: any = {};
+			parameterTableData['Signatrue'] = Signatures.join(', ');
+			parameterTableData['Level'] = level;
+			parameterTableData['Fake amount'] = fakeAmount;
+			parameterTableData['Shuffle'] = shuffleFlag;
+			console.log('New address Parameters: ');
+			console.log(getTableStr(parameterTableData, undefined, { index: 'R', value: 'L' }));
 			ans = await rlQuestion(this.rl, 'Above are the parameters of the new address, please confirm and generate? (y/n): ');
 
 			if (!ans.match(/^y(es)?$/i)) {
@@ -689,7 +697,7 @@ class WalletCli {
 	}
 
 	/**
-	 * Add a new transaction.
+	 * Create transactions
 	 * @param {string} srcAddress Send address.
 	 * @param {string} tgtAddress Target address.
 	 * @param {bigint} value send amount of coin.
@@ -699,7 +707,7 @@ class WalletCli {
 	 * @param {boolean} tempFlag Save this transaction raw temporarily.
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async walletCreateNewTransation(srcAddress: string = requiredArg('srcAddress'), tgtAddress: string = requiredArg('tgtAddress'), value: bigint = requiredArg('value'), extraValue: bigint = 10000n, feeRatio: bigint = 1n, rawFlag: boolean = true, tempFlag: boolean = true): Promise<{ error?: any; result?: any; }> {
+	async walletCreateTransation(srcAddress: string = requiredArg('srcAddress'), tgtAddress: string = requiredArg('tgtAddress'), value: bigint = requiredArg('value'), extraValue: bigint = 10000n, feeRatio: bigint = 1n, useAllUTXO: boolean = false, rawFlag: boolean = true, tempFlag: boolean = true): Promise<{ error?: any; result?: any; }> {
 		if (checkAddressIsBs58ck(srcAddress)) {
 			let bs58 = bs58ck.decode(srcAddress);
 			if (!bs58) {
@@ -707,7 +715,6 @@ class WalletCli {
 			}
 			srcAddress = bs58.toString('hex');
 		}
-
 		if (checkAddressIsBs58ck(tgtAddress)) {
 			let bs58 = bs58ck.decode(tgtAddress);
 			if (!bs58) {
@@ -717,9 +724,79 @@ class WalletCli {
 		}
 
 		let r = await this.post({
-			method: "walletCreateNewTransation",
-			params: [srcAddress, tgtAddress, value.toString(), extraValue.toString(), feeRatio.toString(), rawFlag]
+			method: "walletCreateTransation",
+			params: [srcAddress, tgtAddress, value.toString(), extraValue.toString(), feeRatio.toString(), useAllUTXO, rawFlag]
 		});
+		if (r.err) {
+			return { error: r.err };
+		}
+
+		try {
+			let obj = jsonParse(r.data);
+			if (obj.error) {
+				return { error: `ERROR: ${obj.error}` };
+			}
+			if (tempFlag) {
+				let blockTx = BlockTx.jsonDataToClass((rawFlag) ? obj.result.blockTx.json : obj.result.blockTx);
+				if (blockTx) {
+					this.txTemp = blockTx;
+				}
+			}
+			return { result: obj.result }
+		}
+		catch (e) {
+			return { error: `ERROR: ${e}` };
+		}
+	}
+
+	/**
+	 * Create advanced transactions
+	 * @param {string} srcAddress Send address.
+	 * @param {object[]} target { address, value }[]
+	 * @param {string} target[].address Target address.
+	 * @param {string} target[].value Send amount of coin.
+	 * @param {bigint} extraValue Amount reserved for fee.
+	 * @param {bigint} feeRatio Fee ratio. Do not less than 1.
+	 * @param {boolean} rawFlag Whether the transaction is expressed in raw.
+	 * @param {boolean} tempFlag Save this transaction raw temporarily.
+	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	async walletCreateAdvancedTransation(srcAddress: string = requiredArg('srcAddress'), target: { address: string, value: bigint }[] | bigint = requiredArg('target'), extraValue: bigint = 10000n, feeRatio: bigint = 1n, useAllUTXO: boolean = false, rawFlag: boolean = true, tempFlag: boolean = true): Promise<{ error?: any; result?: any; }> {
+		if (checkAddressIsBs58ck(srcAddress)) {
+			let bs58 = bs58ck.decode(srcAddress);
+			if (!bs58) {
+				return { error: 'ERROR: base58check' };
+			}
+			srcAddress = bs58.toString('hex');
+		}
+		let r;
+		if (typeof target === 'bigint') {
+			r = await this.post({
+				method: "walletCreateAdvancedTransation",
+				params: [srcAddress, target.toString(), extraValue.toString(), feeRatio.toString(), useAllUTXO, rawFlag]
+			});
+		}
+		else {
+			let targetCopy = target.map(x => {
+				let address;
+				if (checkAddressIsBs58ck(x.address)) {
+					let bs58 = bs58ck.decode(x.address);
+					if (!bs58) {
+						return { error: 'ERROR: base58check' };
+					}
+					address = bs58.toString('hex');
+				}
+				else {
+					address = x.address;
+				}
+				return { address, value: x.value.toString() }
+			});
+			r = await this.post({
+				method: "walletCreateAdvancedTransation",
+				params: [srcAddress, targetCopy, extraValue.toString(), feeRatio.toString(), useAllUTXO, rawFlag]
+			});
+		}
+
 
 		if (r.err) {
 			return { error: r.err };
@@ -730,14 +807,12 @@ class WalletCli {
 			if (obj.error) {
 				return { error: `ERROR: ${obj.error}` };
 			}
-
 			if (tempFlag) {
 				let blockTx = BlockTx.jsonDataToClass((rawFlag) ? obj.result.blockTx.json : obj.result.blockTx);
 				if (blockTx) {
 					this.txTemp = blockTx;
 				}
 			}
-
 			return { result: obj.result }
 		}
 		catch (e) {
@@ -751,7 +826,9 @@ class WalletCli {
 	 */
 	async walletGetBalance(): Promise<cliReturn> {
 		let addrList: any = this.wallet.getAddressesList();
-
+		if (!addrList) {
+			return { error: 'wallet is not found' }
+		}
 		let r = await this.post({
 			method: "walletGetBalance",
 			params: [addrList]
@@ -760,11 +837,13 @@ class WalletCli {
 		if (r.err) {
 			return { error: r.err };
 		}
-
 		try {
 			let obj = jsonParse(r.data);
 			if (obj.error) {
 				return { error: `ERROR: ${obj.error}` };
+			}
+			if (obj.result?.error) {
+				return { error: `ERROR: ${obj.result?.error}` };
 			}
 
 			if (this.addressBs58ck) {
@@ -774,12 +853,20 @@ class WalletCli {
 					delete obj.result.sub[x];
 				}
 			}
-
 			let json = this.jsonStringify(obj.result);
 			if (!json) {
 				return { error: 'ERROR: jsonStringify failed' };
 			}
-
+			if (this.jsonTable) {
+				let data = JSON.parse(jsonStringify(obj.result, { bigIntObjFlag: false, bufferObjFlag: false, bigIntObjFloatFlag: this.bigIntObjFloatFlag }));
+				let cData = [];
+				for (let x in data.sub) {
+					cData.push({ address: x, confirmed: data.sub[x].confirmed, unconfirmed: data.sub[x].unconfirmed });
+				}
+				cData.push({ address: 'Tatol', confirmed: data.total.confirmed, unconfirmed: data.total.unconfirmed });
+				let tableStr = getTableStr(cData, undefined, { address: 'L', confirmed: 'R', unconfirmed: 'R' });
+				return { result: json, tableStr };
+			}
 			return { result: json }
 		}
 		catch (e) {
@@ -794,13 +881,12 @@ class WalletCli {
 	 * @param {bigint} value Send amount of coin.
 	 * @param {number[]} signSelect This transaction is signed using the selected signature. And the length of the signature is related to the renewal fee.
 	 * @param {bigint} feeRatio Fee ratio. Do not less than 1. 
+	 * @param {boolean} useAllUTXO Use all UTXO
+	 * @param {string} changeAddress Change address
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async walletSend(srcAddress: string = requiredArg('srcAddress'), tgtAddress: string = requiredArg('tgtAddress'), value: bigint = requiredArg('value'), signSelect?: number[], opReturnStr?: string, feeRatio: bigint = 1n, checkFlag: boolean = true): Promise<{ result?: any, error?: any }> {
-		if (srcAddress == undefined || tgtAddress == undefined || value == undefined) {
-			return { error: 'ERROR: input failed!' };
-		}
-
+	async walletSend(srcAddress: string = requiredArg('srcAddress'), tgtAddress: string = requiredArg('tgtAddress'), value: bigint = requiredArg('value'), signSelect?: number[], opReturnStr?: string, feeRatio: bigint = 1n, useAllUTXO?: boolean, changeAddress?: string, checkFlag: boolean = true): Promise<{ result?: any, error?: any }> {
+		let originInputSrcAddress = srcAddress;
 		if (checkAddressIsBs58ck(srcAddress)) {
 			let bs58 = bs58ck.decode(srcAddress);
 			if (!bs58) {
@@ -815,6 +901,317 @@ class WalletCli {
 				return { error: 'ERROR: base58check!' };
 			}
 			tgtAddress = bs58.toString('hex');
+		}
+
+		if (useAllUTXO === undefined) {
+			let ans = await rlQuestion(this.rl, 'Do you use all UTXO? (y/n): ');
+			if (ans.match(/^y(es)?$/i)) {
+				useAllUTXO = true;
+			}
+			else {
+				useAllUTXO = false;
+			}
+		}
+
+		if (changeAddress === undefined) {
+			let ans = await rlQuestion(this.rl, `Set change address (default address is ${originInputSrcAddress}): `);
+			if (ans === '') {
+				changeAddress = srcAddress;
+			}
+			else if (!chAddress(ans)) {
+				return { error: 'ERROR: change address' }
+			}
+			else {
+				changeAddress = ans;
+			}
+
+			if (checkAddressIsBs58ck(changeAddress)) {
+				let bs58 = bs58ck.decode(changeAddress);
+				if (!bs58) {
+					return { error: 'ERROR: base58check!' };
+				}
+				changeAddress = bs58.toString('hex');
+			}
+		}
+		else {
+			if (checkAddressIsBs58ck(changeAddress)) {
+				let bs58 = bs58ck.decode(changeAddress);
+				if (!bs58) {
+					return { error: 'ERROR: base58check!' };
+				}
+				changeAddress = bs58.toString('hex');
+			}
+		}
+
+		if (!signSelect) {
+			let addressD = this.walletGetAddressDetails(srcAddress);
+			if (addressD.error) {
+				return { error: addressD.error };
+			}
+
+			let questionStr = `Which of the following ${addressD.result.level} signature systems you would like to choose for your signature: (FAKE is not an option)\n`;
+			for (let i = 0; i < addressD.result.signSys.length; i++) {
+				questionStr += ` ${i}) ${addressD.result.signSys[i]}\n`;
+			}
+
+			questionStr += 'Please enter the number and separate it with a comma. (must be in ascending order): ';
+			let orderAns: any = await rlQuestion(this.rl, questionStr);
+			orderAns = orderAns.split(',');
+			if (orderAns.length !== addressD.result.level) {
+				return { error: `ERROR: The number of signatures is incorrect! (It should be ${addressD.result.level}, you entered ${orderAns.length})` };
+			}
+			signSelect = orderAns.map(x => parseInt(x));
+		}
+
+		if (feeRatio < 1n) {
+			return { error: 'ERROR: walletSend feeRatio < 1' };
+		}
+
+		let photon = this.wallet.getSignPhoton(srcAddress, signSelect);
+		if (!photon) {
+			return { error: 'ERROR: walletSend failed!' };
+		}
+
+		let pqcertCheck = await this.checkSignPqcert(srcAddress, signSelect, true);
+		let pqcertAdd = [];
+		if (pqcertCheck.error) {
+			return { error: 'ERROR: Pqcert check error!' };
+		}
+
+		if (!pqcertCheck.result.root.check) {
+			let pqcertRoot = this.wallet.getPqcertRootByAddress(srcAddress);
+			if (!pqcertRoot) {
+				return { error: 'pqcertRoot is not found!' }
+			}
+			photon += pqcertRoot.serialize.length * 2;
+			let cs = getCompactSizeBufferByNumber(pqcertRoot.serialize.length);
+			if (!cs) {
+				return { error: 'ERROR: Pqcert error!' };
+			}
+			photon += cs.length;
+			pqcertAdd.push(pqcertRoot);
+		}
+
+		for (let i = 0; i < pqcertCheck.result.pubHashs.length; i++) {
+			if (!pqcertCheck.result.pubHashs[i].check) {
+				let pqcertPubKey = this.wallet.getPqcertPubKeyByHash(pqcertCheck.result.pubHashs[i].hash);
+				if (!pqcertPubKey) {
+					return { error: 'pqcertPubKey is not found!' }
+				}
+				photon += pqcertPubKey.serialize.length * 2;
+				let cs = getCompactSizeBufferByNumber(pqcertPubKey.serialize.length);
+				if (!cs) {
+					return { error: 'ERROR: pubHashs error!' };
+				}
+				photon += cs.length;
+				pqcertAdd.push(pqcertPubKey);
+			}
+		}
+
+		let opReturn: OpReturn;
+		if (opReturnStr === undefined) {
+
+			let oprAns: any = await rlQuestion(this.rl, 'Please enter an opreturn message (not required): ');
+			opReturn = new OpReturn(Buffer.from(oprAns));
+		}
+		else {
+			opReturn = new OpReturn(Buffer.from(opReturnStr));
+		}
+
+		photon += opReturn.serialize.length * 5;
+		let oprCs = getCompactSizeBufferByNumber(opReturn.serialize.length);
+		if (!oprCs) {
+			return { error: 'ERROR: pubHashs error!' };
+		}
+		photon += oprCs.length;
+
+		let extraValue = BigInt(photon) * feeRatio;
+
+		let Signs = [];
+		let addressDetails = this.wallet.getAddressDetails(srcAddress);
+		if (!addressDetails) {
+			return { error: 'addressDetails is not found!' }
+		}
+		for (let i = 0; i < signSelect.length; i++) {
+			let signName = addressDetails.signSys[signSelect[i]];
+			if (signName === 'FAKE') {
+				return { error: 'sign is FAKE!' }
+			}
+			Signs.push(signName);
+		}
+
+		let r0 = await this.walletCreateTransation(srcAddress, tgtAddress, value, extraValue, feeRatio, useAllUTXO, true, false);
+		if (r0.error) {
+			return { error: r0.error };
+		}
+
+		if (!r0.result.blockTx.raw) {
+			return { error: 'walletCreateTransation failed!' };
+		}
+
+		let nonSignTx = BlockTx.serializeToClass(Buffer.from(r0.result.blockTx.raw, 'hex'));
+		if (!nonSignTx) {
+			return { error: 'walletCreateTransation failed!' };
+		}
+		nonSignTx.setOpReturn(opReturn);
+		for (let i = 0; i < pqcertAdd.length; i++) {
+			let x = pqcertAdd[i];
+			nonSignTx.addPqcert(x);
+		}
+		let inValue: bigint | string = BigInt(r0.result.inValue);
+		let preChangeAmount: bigint = inValue - nonSignTx.vout[0].value;
+		if (preChangeAmount <= 0n) {
+			return { error: 'changeAmount failed!' };
+		}
+		let preChageVoutBuf = Vout.jsonDataToSerialize({
+			value: preChangeAmount.toString(10),
+			lockScript: `20${changeAddress}fc`
+		});
+		if (!preChageVoutBuf) {
+			return { error: 'changeAmount failed!' };
+		}
+		nonSignTx.vout.push(new Vout(preChageVoutBuf));
+		let nonSignTxRaw = nonSignTx.getSerialize();
+		if (!nonSignTxRaw) {
+			return { error: 'walletCreateTransation failed!' };
+		}
+
+		let r1: any = await this.signTx(srcAddress, signSelect, feeRatio, true, true, false, nonSignTxRaw.toString('hex'));
+		if (r1.error) {
+			return { error: r1.error };
+		}
+
+		if (!r1.result?.raw) {
+			return { error: 'Signing failed' };
+		}
+
+		let thisTx = BlockTx.serializeToClass(Buffer.from(r1.result.raw, 'hex'));
+
+		if (!thisTx) {
+			return { error: 'Signing data failed!' };
+		}
+
+		let sendAmount: bigint | string = thisTx.vout[0].value;
+		let changeAmount: bigint | string = (thisTx.vout[1]) ? thisTx.vout[1].value : 0n;
+		let fee: bigint | string = inValue - sendAmount - changeAmount;
+		let actualPhoton = thisTx.getPhoton();
+		if (!actualPhoton) {
+			return { error: 'Getting ActualPhoton failed!' };
+		}
+
+		let photonDetails = thisTx.getPhotonDetails();
+		if (!photonDetails) {
+			return { error: 'Getting Photon details failed!' };
+		}
+
+		let feeDetails = '';
+		feeDetails += `unlockScript: ${floatToPercentage(photonDetails.unlockScriptPhoton / actualPhoton)},`;
+		feeDetails += ` pqcert: ${floatToPercentage(photonDetails.pqcertPhoton / actualPhoton)},`;
+		feeDetails += ` opReturn: ${floatToPercentage(photonDetails.opReturnPhoton / actualPhoton)},`;
+		feeDetails += ` other: ${floatToPercentage(photonDetails.otherPhoton / actualPhoton)},`;
+
+		if (this.bigIntObjFloatFlag) {
+			inValue = bigIntToFloatString(inValue);
+			sendAmount = bigIntToFloatString(sendAmount);
+			changeAmount = bigIntToFloatString(changeAmount);
+			fee = bigIntToFloatString(fee);
+		}
+
+		let tableData: any = {};
+		tableData['Source'] = `${(this.addressBs58ck) ? bs58ck.encode(srcAddress) : srcAddress}`;
+		tableData['Target'] = `${sendAmount} -> ${(this.addressBs58ck) ? bs58ck.encode(tgtAddress) : tgtAddress}`;
+		tableData['UTXO amount'] = `${inValue}`;
+		tableData['Sending'] = `${sendAmount}`;
+		if (changeAmount === '0.00000000') {
+			tableData['Change'] = '0';
+		}
+		else {
+			tableData['Change'] = `${changeAmount} -> ${(this.addressBs58ck) ? bs58ck.encode(changeAddress) : changeAddress}`;
+		}
+		tableData['Fee amount'] = `${fee}`;
+		tableData['Fee details'] = `${feeDetails}`;
+		tableData['Photon amount'] = `${actualPhoton}`;
+		tableData['Signatrue'] = `${Signs.join(', ')}`;
+		console.log('Transaction details: ');
+		console.log(getTableStr(tableData, undefined, { index: 'R', value: 'L' }));
+		if (checkFlag) {
+			let ans = await rlQuestion(this.rl, 'Please check if your transaction (above) is correct. (y/n): ');
+			if (!ans.match(/^y(es)?$/i)) {
+				this.clearTxTemp();
+				return { error: 'Cancelled.' };
+			}
+		}
+		return await this.sendTx(r1.result.raw);
+	}
+
+	/**
+	 * The easy method. One-time transaction generation.
+	 * @param {string} srcAddress Send address.
+	 * @param {object[]} target { address, value }[]
+	 * @param {string} target[].address Target address.
+	 * @param {string} target[].value Send amount of coin.
+	 * @param {number[]} signSelect This transaction is signed using the selected signature. And the length of the signature is related to the renewal fee.
+	 * @param {bigint} feeRatio Fee ratio. Do not less than 1. 
+	 * @param {boolean} useAllUTXO Use all UTXO
+	 * @param {string} changeAddress Change address
+	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	async walletSendMany(srcAddress: string = requiredArg('srcAddress'), target: { address: string, value: bigint }[] = requiredArg('target'), signSelect?: number[], opReturnStr?: string, feeRatio: bigint = 1n, useAllUTXO?: boolean, changeAddress?: string, checkFlag: boolean = true): Promise<{ result?: any, error?: any }> {
+		let originInputSrcAddress = srcAddress;
+		if (checkAddressIsBs58ck(srcAddress)) {
+			let bs58 = bs58ck.decode(srcAddress);
+			if (!bs58) {
+				return { error: 'ERROR: base58check!' };
+			}
+			srcAddress = bs58.toString('hex');
+		}
+		for (let i = 0; i < target.length; i++) {
+			if (checkAddressIsBs58ck(target[i].address)) {
+				let bs58 = bs58ck.decode(target[i].address);
+				if (!bs58) {
+					return { error: 'ERROR: base58check' };
+				}
+				target[i].address = bs58.toString('hex');
+			}
+		}
+
+		if (useAllUTXO === undefined) {
+			let ans = await rlQuestion(this.rl, 'Do you use all UTXO? (y/n): ');
+			if (ans.match(/^y(es)?$/i)) {
+				useAllUTXO = true;
+			}
+			else {
+				useAllUTXO = false;
+			}
+		}
+
+		if (changeAddress === undefined) {
+			let ans = await rlQuestion(this.rl, `Set change address (default address is ${originInputSrcAddress}): `);
+			if (ans === '') {
+				changeAddress = srcAddress;
+			}
+			else if (!chAddress(ans)) {
+				return { error: 'ERROR: change address' }
+			}
+			else {
+				changeAddress = ans;
+			}
+			if (checkAddressIsBs58ck(changeAddress)) {
+				let bs58 = bs58ck.decode(changeAddress);
+				if (!bs58) {
+					return { error: 'ERROR: base58check!' };
+				}
+				changeAddress = bs58.toString('hex');
+			}
+		}
+		else {
+			if (checkAddressIsBs58ck(changeAddress)) {
+				let bs58 = bs58ck.decode(changeAddress);
+				if (!bs58) {
+					return { error: 'ERROR: base58check!' };
+				}
+				changeAddress = bs58.toString('hex');
+			}
 		}
 
 		if (!signSelect) {
@@ -846,7 +1243,7 @@ class WalletCli {
 		if (!photon) {
 			return { error: 'ERROR: walletSend failed!' };
 		}
-		
+
 		let pqcertCheck = await this.checkSignPqcert(srcAddress, signSelect, true);
 		let pqcertAdd = [];
 		if (pqcertCheck.error) {
@@ -875,7 +1272,6 @@ class WalletCli {
 				if (!pqcertPubKey) {
 					return { error: 'pqcertPubKey is not found!' }
 				}
-
 				photon += pqcertPubKey.serialize.length * 2;
 				let cs = getCompactSizeBufferByNumber(pqcertPubKey.serialize.length);
 				if (!cs) {
@@ -887,8 +1283,7 @@ class WalletCli {
 		}
 
 		let opReturn: OpReturn;
-		if (opReturnStr === undefined) { 
-
+		if (opReturnStr === undefined) {
 			let oprAns: any = await rlQuestion(this.rl, 'Please enter an opreturn message (not required): ');
 			opReturn = new OpReturn(Buffer.from(oprAns));
 		}
@@ -902,9 +1297,7 @@ class WalletCli {
 			return { error: 'ERROR: pubHashs error!' };
 		}
 		photon += oprCs.length;
-
 		let extraValue = BigInt(photon) * feeRatio;
-
 		let Signs = [];
 		let addressDetails = this.wallet.getAddressDetails(srcAddress);
 		if (!addressDetails) {
@@ -918,84 +1311,114 @@ class WalletCli {
 			Signs.push(signName);
 		}
 
-		let r0 = await this.walletCreateNewTransation(srcAddress, tgtAddress, value, extraValue, feeRatio, true, false);
+		let r0 = await this.walletCreateAdvancedTransation(srcAddress, target, extraValue, feeRatio, useAllUTXO, true, false);
 		if (r0.error) {
 			return { error: r0.error };
 		}
 
 		if (!r0.result.blockTx.raw) {
-			return { error: 'walletCreateNewTransation failed!' };
+			return { error: 'walletCreateTransation failed!' };
 		}
 
 		let nonSignTx = BlockTx.serializeToClass(Buffer.from(r0.result.blockTx.raw, 'hex'));
 		if (!nonSignTx) {
-			return { error: 'walletCreateNewTransation failed!' };
+			return { error: 'walletCreateTransation failed!' };
 		}
 		nonSignTx.setOpReturn(opReturn);
-
 		for (let i = 0; i < pqcertAdd.length; i++) {
 			let x = pqcertAdd[i];
 			nonSignTx.addPqcert(x);
 		}
-
+		let inValue: bigint | string = BigInt(r0.result.inValue);
+		let preChangeAmount: bigint = inValue - nonSignTx.vout.reduce((a, { value }) => a + value, 0n);
+		if (preChangeAmount <= 0n) {
+			return { error: 'changeAmount failed!' };
+		}
+		let preChageVoutBuf = Vout.jsonDataToSerialize({
+			value: preChangeAmount.toString(10),
+			lockScript: `20${changeAddress}fc`
+		});
+		if (!preChageVoutBuf) {
+			return { error: 'changeAmount failed!' };
+		}
+		nonSignTx.vout.push(new Vout(preChageVoutBuf));
 		let nonSignTxRaw = nonSignTx.getSerialize();
 		if (!nonSignTxRaw) {
-			return { error: 'walletCreateNewTransation failed!' };
+			return { error: 'walletCreateTransation failed!' };
 		}
+
+		let changeVoutIndex = nonSignTx.vout.length - 1;
 
 		let r1: any = await this.signTx(srcAddress, signSelect, feeRatio, true, true, false, nonSignTxRaw.toString('hex'));
 		if (r1.error) {
 			return { error: r1.error };
 		}
-
 		if (!r1.result?.raw) {
 			return { error: 'Signing failed' };
 		}
 
 		let thisTx = BlockTx.serializeToClass(Buffer.from(r1.result.raw, 'hex'));
-
 		if (!thisTx) {
 			return { error: 'Signing data failed!' };
 		}
 
-		let inValue: bigint | string = BigInt(r0.result.inValue);
-		let sendAmount: bigint | string = thisTx.vout[0].value;
-		let changeAmount: bigint | string = thisTx.vout[1].value;
+		let sendAmount: bigint | string = thisTx.vout.reduce((a, { value }, i) => ((i !== changeVoutIndex) ? a + value : a), 0n);
+		let changeAmount: bigint | string = (thisTx.vout[changeVoutIndex]) ? thisTx.vout[changeVoutIndex].value : 0n;
 		let fee: bigint | string = inValue - sendAmount - changeAmount;
 		let actualPhoton = thisTx.getPhoton();
-		if(!actualPhoton) {
+		if (!actualPhoton) {
 			return { error: 'Getting ActualPhoton failed!' };
 		}
-		
+
 		let photonDetails = thisTx.getPhotonDetails();
-		if(!photonDetails) {
+		if (!photonDetails) {
 			return { error: 'Getting Photon details failed!' };
 		}
-		
+
 		let feeDetails = '';
 		feeDetails += `unlockScript: ${floatToPercentage(photonDetails.unlockScriptPhoton / actualPhoton)},`;
 		feeDetails += ` pqcert: ${floatToPercentage(photonDetails.pqcertPhoton / actualPhoton)},`;
 		feeDetails += ` opReturn: ${floatToPercentage(photonDetails.opReturnPhoton / actualPhoton)},`;
 		feeDetails += ` other: ${floatToPercentage(photonDetails.otherPhoton / actualPhoton)},`;
-		
-		if(this.bigIntObjFloatFlag) {
+
+		let finalChange: any = (thisTx.vout[changeVoutIndex]) ? { address: thisTx.vout[thisTx.vout.length - 1].address, value: thisTx.vout[thisTx.vout.length - 1].value } : null;
+		if (finalChange && !finalChange.address) {
+			return { error: "ERROR: final change address error" };
+		}
+		let finalTarget: any[] = thisTx.vout.slice(0, changeVoutIndex).map(({ address, value }) => ({ address, value }));
+		if (this.bigIntObjFloatFlag) {
 			inValue = bigIntToFloatString(inValue);
 			sendAmount = bigIntToFloatString(sendAmount);
-			changeAmount = bigIntToFloatString(changeAmount);
 			fee = bigIntToFloatString(fee);
+			if (finalChange) {
+				finalChange.value = bigIntToFloatString(finalChange.value);
+			}
+			finalTarget.forEach(x => { x.value = bigIntToFloatString(x.value); });
 		}
 
-		console.log('-------------------- Transaction details --------------------'.padEnd(process.stdout.columns, '-'));
-		console.log(`Source address\t: ${(this.addressBs58ck) ? bs58ck.encode(srcAddress) : srcAddress}`);
-		console.log(`Target address\t: ${(this.addressBs58ck) ? bs58ck.encode(tgtAddress) : tgtAddress}`);
-		console.log(`UTXO amount\t: ${inValue}`);
-		console.log(`Sending amount\t: ${sendAmount}`);
-		console.log(`Change amount\t: ${changeAmount}`);
-		console.log(`Fee amount\t: ${fee}`);
-		console.log(`Fee details\t: ${feeDetails}`);
-		console.log(`Photon amount\t: ${actualPhoton}`);
-		console.log(`Signatrue\t: ${Signs.join(', ')}`);
-		console.log('-------------------- Details end ----------------------------'.padEnd(process.stdout.columns, '-'));
+		let tableData: any = {};
+		tableData['Source'] = `${(this.addressBs58ck) ? bs58ck.encode(srcAddress) : srcAddress}`;
+		for (let i = 0; i < finalTarget.length; i++) {
+			let thisAddr = finalTarget[i].address;
+			if (!thisAddr) {
+				return { error: "ERROR: tx error" };
+			}
+			tableData[`Target [${i}]`] = `${finalTarget[i].value} -> ${(this.addressBs58ck) ? bs58ck.encode(thisAddr) : finalTarget[i].address}`;
+		}
+		tableData['UTXO amount'] = `${inValue}`;
+		tableData['Sending'] = `${sendAmount}`;
+		if (finalChange) {
+			tableData['Change'] = `${finalChange.value} -> ${(this.addressBs58ck) ? bs58ck.encode(finalChange.address) : finalChange.address}`;
+		}
+		else {
+			tableData['Change'] = `0`;
+		}
+		tableData['Fee amount'] = `${fee}`;
+		tableData['Fee details'] = `${feeDetails}`;
+		tableData['Photon amount'] = `${actualPhoton}`;
+		tableData['Signatrue'] = `${Signs.join(', ')}`;
+		console.log('Transaction details: ');
+		console.log(getTableStr(tableData, undefined, { index: 'R', value: 'L' }));
 		if (checkFlag) {
 			let ans = await rlQuestion(this.rl, 'Please check if your transaction (above) is correct. (y/n): ');
 			if (!ans.match(/^y(es)?$/i)) {
@@ -1008,14 +1431,364 @@ class WalletCli {
 	}
 
 	/**
+	 * Wallet advanced sending
+	 * @param srcAddressList 
+	 * @param target 
+	 * @param feeRatio 
+	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	async walletASend(srcAddressList: string[] = requiredArg('srcAddress'), target: { address: string, value: bigint }[] = requiredArg('target'), feeRatio: bigint = 1n): Promise<{ result?: any, error?: any }> {
+		if (feeRatio < 1n) {
+			return { error: 'ERROR: walletSend feeRatio < 1' };
+		}
+		let srcAddressDuplicateTable: { [key: string]: boolean } = {};
+		let viewAddress = { srcAddressList: [], target: [] };
+		for (let i = 0; i < srcAddressList.length; i++) {
+			viewAddress.srcAddressList[i] = srcAddressList[i];
+			if (checkAddressIsBs58ck(srcAddressList[i])) {
+				let bs58 = bs58ck.decode(srcAddressList[i]);
+				if (!bs58) {
+					return { error: 'ERROR: base58check' };
+				}
+				srcAddressList[i] = bs58.toString('hex');
+				if (!this.wallet.addressDoseExist(srcAddressList[i])) {
+					return { error: 'ERROR: srcAddress is not found' };
+				}
+				if (srcAddressDuplicateTable[srcAddressList[i]]) {
+					return { error: 'ERROR: The srcAddress are duplicated' };
+				}
+			}
+		}
+		let totalValue = 0n;
+		for (let i = 0; i < target.length; i++) {
+			viewAddress.target[i] = target[i].address;
+			if (checkAddressIsBs58ck(target[i].address)) {
+				let bs58 = bs58ck.decode(target[i].address);
+				if (!bs58) {
+					return { error: 'ERROR: base58check' };
+				}
+				target[i].address = bs58.toString('hex');
+				totalValue += target[i].value;
+			}
+		}
+		let balance: any = await this.post({
+			method: "walletGetBalance",
+			params: [srcAddressList]
+		});
+		if (balance.err) {
+			return { error: balance.err };
+		}
+		try {
+			let obj = jsonParse(balance.data);
+			if (obj.error) {
+				return { error: `ERROR: ${obj.error}` };
+			}
+			if (BigInt(obj.result.total.confirmed) < totalValue) {
+				return { error: `ERROR: Insufficient balance` };
+			}
+			balance = obj;
+		}
+		catch (e) {
+			return { error: `ERROR: ${e}` };
+		}
+
+		let useAllUTXO: string | boolean = await rlQuestion(this.rl, 'Do you use all UTXO? (y/n): ');
+		if (useAllUTXO.match(/^y(es)?$/i)) {
+			useAllUTXO = true;
+		}
+		else {
+			useAllUTXO = false;
+		}
+
+		let opReturn: OpReturn;
+		let oprAns: any = await rlQuestion(this.rl, 'Please enter an opreturn message (not required): ');
+		opReturn = new OpReturn(Buffer.from(oprAns));
+
+		let basePhoton = opReturn.serialize.length * 5;
+		let voutCS = getCompactSizeBufferByNumber(target.length);
+		if (!voutCS) {
+			return { error: `ERROR: getCompactSizeBufferByNumber error` };;
+		}
+		basePhoton += voutCS.length;
+		basePhoton += (target.length * 8);
+		let oprCs = getCompactSizeBufferByNumber(opReturn.serialize.length);
+		if (!oprCs) {
+			return { error: 'ERROR: pubHashs error!' };
+		}
+		basePhoton += oprCs.length;
+		let useValue = 0n;
+		let totalExtraValue = 0n;
+		let useAddress: { address: string, signSelect: number[], signSelectName: string[], inValue: bigint | string }[] = [];
+		let thisBlockTx = BlockTx.jsonDataToClass({
+			version: 0,
+			vin: [],
+			vout: target.map(({ address, value }) => ({ value: value.toString(), lockScript: `20${address}fc` })),
+			pqcert: [],
+			opReturn: opReturn.toString(),
+			nLockTime: 0
+		});
+		if (!thisBlockTx) {
+			return { error: 'ERROR: creat tx error!' };
+		}
+
+		let pqcertHashTable: { [key: string]: boolean } = {};
+		for (let i = 0; i < srcAddressList.length; i++) {
+			let srcAddress = srcAddressList[i];
+			let useAllThis: string | boolean = false;
+			if (useValue >= totalValue && !useAllUTXO) {
+				let continue2Use = await rlQuestion(this.rl, `The transaction amount is sufficient, do you still need to use the (${viewAddress.srcAddressList[i]}) address, and use all UTXO? (y/n): `);
+				if (!continue2Use.match(/^y(es)?$/i)) {
+					break;
+				}
+				useAllThis = true;
+			}
+			if (!useAllUTXO && !useAllThis) {
+				useAllThis = await rlQuestion(this.rl, `Do you use all UTXO from (${viewAddress.srcAddressList[i]}) address? (y/n): `);
+				if (useAllThis.match(/^y(es)?$/i)) {
+					useAllThis = true;
+				}
+				else {
+					useAllThis = false;
+				}
+			}
+			let thisAddrBalance = balance.result?.sub[srcAddress]?.confirmed;
+			if (thisAddrBalance === undefined) {
+				return { error: `${thisAddrBalance} balance not found` };
+			}
+			let thisValue = totalValue - useValue;
+			let addressD = this.walletGetAddressDetails(srcAddress);
+			if (addressD.error) {
+				return { error: addressD.error };
+			}
+
+			let questionStr = `Now using "${(this.addressBs58ck) ? bs58ck.encode(srcAddressList[i]) : srcAddressList[i]}}", which of the following ${addressD.result.level} signature systems you would like to choose for your signature: (FAKE is not an option)\n`;
+			for (let i = 0; i < addressD.result.signSys.length; i++) {
+				questionStr += ` ${i}) ${(addressD.result.signSys[i])}\n`;
+			}
+
+			questionStr += 'Please enter the number and separate it with a comma. (must be in ascending order): ';
+
+			let orderAns: any = await rlQuestion(this.rl, questionStr);
+			orderAns = orderAns.split(',');
+			if (orderAns.length !== addressD.result.level) {
+				return { error: `ERROR: The number of signatures is incorrect! (It should be ${addressD.result.level}, you entered ${orderAns.length})` };
+			}
+			let signSelect = orderAns.map(x => parseInt(x));
+			let photon = this.wallet.getSignPhoton(srcAddress, signSelect);
+			if (!photon) {
+				return { error: 'ERROR: walletSend failed!' };
+			}
+
+			let pqcertCheck = await this.checkSignPqcert(srcAddress, signSelect, true);
+			let pqcertAdd = [];
+			if (pqcertCheck.error) {
+				return { error: 'ERROR: Pqcert check error!' };
+			}
+
+			if (!pqcertCheck.result.root.check) {
+				if (!pqcertHashTable[srcAddress]) {
+					let pqcertRoot = this.wallet.getPqcertRootByAddress(srcAddress);
+					if (!pqcertRoot) {
+						return { error: 'pqcertRoot is not found!' }
+					}
+
+					photon += pqcertRoot.serialize.length * 2;
+					let cs = getCompactSizeBufferByNumber(pqcertRoot.serialize.length);
+					if (!cs) {
+						return { error: 'ERROR: Pqcert error!' };
+					}
+					photon += cs.length;
+					pqcertAdd.push(pqcertRoot);
+					pqcertHashTable[srcAddress] = true;
+				}
+			}
+
+			for (let i = 0; i < pqcertCheck.result.pubHashs.length; i++) {
+				if (!pqcertCheck.result.pubHashs[i].check) {
+					if (!pqcertHashTable[pqcertCheck.result.pubHashs[i].hash]) {
+						let pqcertPubKey = this.wallet.getPqcertPubKeyByHash(pqcertCheck.result.pubHashs[i].hash);
+						if (!pqcertPubKey) {
+							return { error: 'pqcertPubKey is not found!' };
+						}
+						photon += pqcertPubKey.serialize.length * 2;
+						let cs = getCompactSizeBufferByNumber(pqcertPubKey.serialize.length);
+						if (!cs) {
+							return { error: 'ERROR: pubHashs error!' };
+						}
+						photon += cs.length;
+						pqcertAdd.push(pqcertPubKey);
+						pqcertHashTable[pqcertCheck.result.pubHashs[i].hash] = true;
+					}
+				}
+			}
+
+			let extraValue = (i === 0) ? BigInt(basePhoton + photon) * feeRatio : BigInt(photon) * feeRatio;
+			let Signs = [];
+			let addressDetails = this.wallet.getAddressDetails(srcAddress);
+			if (!addressDetails) {
+				return { error: 'addressDetails is not found!' }
+			}
+			for (let i = 0; i < signSelect.length; i++) {
+				let signName = addressDetails.signSys[signSelect[i]];
+				if (signName === 'FAKE') {
+					return { error: 'sign is FAKE!' }
+				}
+				Signs.push(signName);
+			}
+			let r0;
+			if (thisValue + extraValue + totalExtraValue > thisAddrBalance || useAllUTXO || useAllThis) {
+				// use all utxo
+				r0 = await this.walletCreateAdvancedTransation(srcAddress, 0n, extraValue + totalExtraValue, feeRatio, true, true, false);
+				if (r0.result) {
+					if (extraValue > r0.result.inValue) {
+						totalExtraValue += (extraValue - r0.result.inValue);
+					}
+
+				}
+			}
+			else {
+				console.log({ thisValue, extraValue: extraValue + totalExtraValue });
+				r0 = await this.walletCreateAdvancedTransation(srcAddress, thisValue, extraValue + totalExtraValue, feeRatio, false, true, false);
+				totalExtraValue = 0n;
+			}
+			if (r0.error) {
+				return { error: r0.error };
+			}
+			useValue += r0.result.inValue;
+			let tx = BlockTx.serializeToClass(Buffer.from(r0.result.blockTx.raw, 'hex'));
+			if (!tx) {
+				return { error: 'ERROR: BlockTx error!' };
+			}
+			for (let j = 0; j < tx.vin.length; j++) {
+				thisBlockTx.vin.push(tx.vin[j]);
+			}
+			for (let j = 0; j < pqcertAdd.length; j++) {
+				thisBlockTx.addPqcert(pqcertAdd[j]);
+			}
+			useAddress.push({ address: srcAddress, signSelect, signSelectName: Signs, inValue: r0.result.inValue });
+		}
+
+		let changeAddress: any = await rlQuestion(this.rl, `Set change address (default address is ${(this.addressBs58ck) ? bs58ck.encode(useAddress[useAddress.length - 1].address) : useAddress[useAddress.length - 1].address}): `);
+		if (changeAddress === '') {
+			changeAddress = useAddress[useAddress.length - 1].address;
+		}
+		else if (!chAddress(changeAddress)) {
+			return { error: 'ERROR: change address' }
+		}
+		if (checkAddressIsBs58ck(changeAddress)) {
+			let bs58 = bs58ck.decode(changeAddress);
+			if (!bs58) {
+				return { error: 'ERROR: base58check!' };
+			}
+			changeAddress = bs58.toString('hex');
+		}
+
+		let changeVout = Vout.jsonDataToSerialize({ value: (useValue - totalValue).toString(), lockScript: `20${changeAddress}fc` });
+		if (!changeVout) {
+			return { error: 'ERROR: changeVout!' };
+		}
+		thisBlockTx.vout.push(new Vout(changeVout, true));
+		let changeVoutIndex = thisBlockTx.vout.length - 1;
+		let txRaw = thisBlockTx.getSerialize();
+		if (!txRaw) {
+			return { error: 'ERROR: BlockTx raw error!' };
+		}
+
+		let r1: any = await this.signTxMultiAddress(useAddress, feeRatio, true, false, false, txRaw.toString('hex'));
+		if (r1.error) {
+			return { error: r1.error };
+		}
+		if (!r1.result?.raw) {
+			return { error: 'Signing failed' };
+		}
+		let thisTx = BlockTx.serializeToClass(Buffer.from(r1.result.raw, 'hex'));
+		if (!thisTx) {
+			return { error: 'Signing data failed!' };
+		}
+		let finalTarget: any[] = thisTx.vout.slice(0, changeVoutIndex).map(({ address, value }) => ({ address, value }));
+		let inValue: string;
+		let changeAmount: bigint | string = (thisTx.vout[changeVoutIndex]) ? thisTx.vout[changeVoutIndex].value : 0n;
+		let fee: bigint | string = useValue - totalValue - changeAmount;
+		let sendAmount: string;
+		let finalChange: any = (thisTx.vout[changeVoutIndex]) ? { address: thisTx.vout[thisTx.vout.length - 1].address, value: thisTx.vout[thisTx.vout.length - 1].value } : null;
+		if (finalChange && !finalChange.address) {
+			return { error: "ERROR: final change address error" };
+		}
+		let actualPhoton = thisTx.getPhoton();
+		if (!actualPhoton) {
+			return { error: 'Getting ActualPhoton failed!' };
+		}
+		let photonDetails = thisTx.getPhotonDetails();
+		if (!photonDetails) {
+			return { error: 'Getting Photon details failed!' };
+		}
+		let feeDetails = '';
+		feeDetails += `unlockScript: ${floatToPercentage(photonDetails.unlockScriptPhoton / actualPhoton)},`;
+		feeDetails += ` pqcert: ${floatToPercentage(photonDetails.pqcertPhoton / actualPhoton)},`;
+		feeDetails += ` opReturn: ${floatToPercentage(photonDetails.opReturnPhoton / actualPhoton)},`;
+		feeDetails += ` other: ${floatToPercentage(photonDetails.otherPhoton / actualPhoton)},`;
+		if (this.bigIntObjFloatFlag) {
+			inValue = bigIntToFloatString(useValue);
+			sendAmount = bigIntToFloatString(totalValue);
+			fee = bigIntToFloatString(fee);
+			if (finalChange) {
+				finalChange.value = bigIntToFloatString(finalChange.value);
+			}
+			finalTarget.forEach(x => { x.value = bigIntToFloatString(x.value); });
+			useAddress.forEach(x => { x.inValue = bigIntToFloatString(<bigint>(x.inValue)); });
+		}
+		else {
+			inValue = `${useValue}`;
+			sendAmount = `${totalValue}`;
+
+		}
+
+		let tableData: any = {};
+		for (let i = 0; i < useAddress.length; i++) {
+			tableData[`Source [${i}]`] = `${(this.addressBs58ck) ? bs58ck.encode(useAddress[i].address) : useAddress[i].address} -> ${useAddress[i].inValue}`;
+		}
+		for (let i = 0; i < finalTarget.length; i++) {
+			let thisAddr = finalTarget[i].address;
+			if (!thisAddr) {
+				return { error: "ERROR: tx error" };
+			}
+			tableData[`Target [${i}]`] = `${finalTarget[i].value} -> ${(this.addressBs58ck) ? bs58ck.encode(thisAddr) : finalTarget[i].address}`;
+		}
+		tableData['UTXO amount'] = `${inValue}`;
+		tableData['Sending'] = `${sendAmount}`;
+		if (finalChange) {
+			tableData['Change'] = `${finalChange.value} -> ${(this.addressBs58ck) ? bs58ck.encode(finalChange.address) : finalChange.address}`;
+		}
+		else {
+			tableData['Change'] = `0`;
+		}
+		tableData['Fee amount'] = `${fee}`;
+		tableData['Fee details'] = `${feeDetails}`;
+		tableData['Photon amount'] = `${actualPhoton}`;
+		for (let i = 0; i < useAddress.length; i++) {
+			tableData[`Signatrue [${i}]`] = `${((this.addressBs58ck) ? bs58ck.encode(useAddress[i].address) : useAddress[i].address).substring(0, 12)}... -> ${useAddress[i].signSelectName.join(', ')}`;
+		}
+
+		console.log('Transaction details: ');
+		console.log(getTableStr(tableData, undefined, { index: 'R', value: 'L' }));
+		let ans = await rlQuestion(this.rl, 'Please check if your transaction (above) is correct. (y/n): ');
+		if (!ans.match(/^y(es)?$/i)) {
+			return { error: 'Cancelled.' };
+		}
+		return await this.sendTx(r1.result.raw);
+	}
+
+
+	/**
 	 * Get transactions for the wallet address.
 	 * @param {string} address The wallet address.
 	 * @param {number} [limit=20] 
 	 * @param {number} [skip=0] 
 	 * @param {boolean} [reverse=true] 
+	 * @param {boolean} [normalFlag=false] 
 	 * @returns {cliReturn} If complete return `{result: any}` else return `{error: any}`.
 	 */
-	async walletGetTxList(address: string = requiredArg('address'), limit: number = 20, skip: number = 0, reverse: boolean = true): Promise<cliReturn> {
+	async walletGetTxList(address: string = requiredArg('address'), limit: number = 20, skip: number = 0, reverse: boolean = true, normalFlag: boolean = true): Promise<cliReturn> {
 		if (checkAddressIsBs58ck(address)) {
 			let bs58 = bs58ck.decode(address);
 			if (!bs58) {
@@ -1023,21 +1796,17 @@ class WalletCli {
 			}
 			address = bs58.toString('hex');
 		}
-
 		let r = await this.post({
 			method: "walletGetTxList",
-			params: [address, limit, skip, reverse]
+			params: [address, limit, skip, reverse, normalFlag]
 		});
-
 		if (r.err) {
 			return { error: r.err };
 		}
-
 		let obj = jsonParse(r.data);
 		if (obj.error) {
 			return { error: obj.error };
 		}
-
 		if (this.addressBs58ck) {
 			if (obj.result?.txList) {
 				obj.result.txList.forEach(x => {
@@ -1061,7 +1830,36 @@ class WalletCli {
 		}
 
 		let result = this.jsonStringify(obj.result);
+		if (this.jsonTable) {
+			let data = JSON.parse(jsonStringify(obj.result, { bigIntObjFlag: false, bufferObjFlag: false, bigIntObjFloatFlag: this.bigIntObjFloatFlag }));
+			let tableStr = '';
+			if (data.waitTx.length) {
+				tableStr += 'In the queue: \n';
+				data.waitTx = data.waitTx.map(({ txid, time, value, feeRatio }) => ({ txid, time: Math.round(time / 1000), sendValue: value.sendValue, receiveValue: value.receiveValue, feeRatio: Math.round(feeRatio * 1000) / 1000 }));
+				tableStr += getTableStr(data.waitTx, undefined, { height: 'R', txn: 'R', time: 'R', sendValue: 'R', receiveValue: 'R', feeRatio: 'R' });
+			}
+			if (data.mining.length) {
+				tableStr += 'Waiting for new blocks: \n';
+				data.waitTx = data.mining.map(({ txid, time, value, feeRatio }) => ({ txid, time: Math.round(time / 1000), sendValue: value.sendValue, receiveValue: value.receiveValue, feeRatio: Math.round(feeRatio * 1000) / 1000 }));
+				tableStr += getTableStr(data.mining, undefined, { height: 'R', txn: 'R', time: 'R', sendValue: 'R', receiveValue: 'R', feeRatio: 'R' });
+			}
+			tableStr += 'Confirmed: \n';
+			if (normalFlag) {
+				tableStr += getTableStr(data.txList, ['txid', 'height', 'txn', 'time', 'sendValue', 'receiveValue'], { height: 'R', txn: 'R', time: 'R', sendValue: 'R', receiveValue: 'R' });
+			}
+			else {
+				data.txList = data.txList.map(({ txid, height, txn, type, vinn, voutn, value, voutspent }) => ({
+					txid,
+					height,
+					txn,
+					type: (type === 'receive') ? `receive; voutn=${voutn}; voutspent=${voutspent}` : `send; vinn=${vinn}`,
+					value
+				}))
+				tableStr += getTableStr(data.txList, ['txid', 'height', 'txn', 'type', 'value'], { height: 'R', txn: 'R', time: 'R', vinn: 'R', voutn: 'R', value: 'R', voutspent: 'R' });
+			}
 
+			return { result, tableStr };
+		}
 		return { result };
 	}
 
@@ -1086,7 +1884,6 @@ class WalletCli {
 			method: "walletGetUTXOList",
 			params: [address, limit, skip, reverse]
 		});
-
 		if (r.err) {
 			return { error: r.err };
 		}
@@ -1095,7 +1892,6 @@ class WalletCli {
 		if (obj.error) {
 			return { error: obj.error };
 		}
-
 		if (this.addressBs58ck) {
 			if (obj.result?.txList) {
 				obj.result.txList.forEach(x => {
@@ -1107,7 +1903,11 @@ class WalletCli {
 		}
 
 		let result = this.jsonStringify(obj.result);
-
+		if (this.jsonTable) {
+			let data = JSON.parse(jsonStringify(obj.result, { bigIntObjFlag: false, bufferObjFlag: false, bigIntObjFloatFlag: this.bigIntObjFloatFlag }));
+			let tableStr = getTableStr(data, ['txid', 'height', 'txn', 'voutn', 'value', 'status'], { height: 'R', txn: 'R', voutn: 'R', value: 'R' });
+			return { result, tableStr };
+		}
 		return { result };
 	}
 
@@ -1184,7 +1984,7 @@ class WalletCli {
 		if (!PqcertPubKey) {
 			return { error: 'ERROR: get PqcertPubKey failed.' }
 		}
-		
+
 		blockTx.addPqcert(PqcertPubKey);
 		let json = blockTx.json;
 		if (!json) {
@@ -1372,6 +2172,93 @@ class WalletCli {
 		return { result: { json, raw: raw.toString('hex') } };
 	}
 
+	async signTxMultiAddress(addressList: { address: string, signSelect: number[] }[] = requiredArg('address'), feeRatio: bigint = 1n, rawFlag: boolean = true, tempFlag: boolean = true, autoAddPqcert: boolean = true, txRaw: string = null): Promise<cliReturn> {
+		for (let i = 0; i < addressList.length; i++) {
+			if (checkAddressIsBs58ck(addressList[i].address)) {
+				let bs58 = bs58ck.decode(addressList[i].address);
+				if (!bs58) {
+					return { error: 'ERROR: base58check' };
+				}
+				addressList[i].address = bs58.toString('hex');
+			}
+
+			if (!Array.isArray(addressList[i].signSelect)) {
+				return { error: 'ERROR: Input formatting error' };
+			}
+		}
+
+		let blockTx = (txRaw) ? BlockTx.serializeToClass(Buffer.from(txRaw, 'hex')) : this.txTemp;
+		if (!blockTx) {
+			return { error: 'ERROR: blockTx error' };
+		}
+
+		if (autoAddPqcert) {
+			let pqcertHashTable: { [key: string]: boolean } = {};
+			for (let j = 0; j < addressList.length; j++) {
+				let { address, signSelect } = addressList[j];
+				let pqcertCheck = await this.checkSignPqcert(address, signSelect, true);
+				if (pqcertCheck.error) {
+					return { error: 'ERROR: Pqcert check error' };
+				}
+
+				if (!pqcertCheck.result.root.check) {
+					if (!pqcertHashTable[pqcertCheck.result.root.hash]) {
+						let pqcertRoot = this.wallet.getPqcertRootByAddress(pqcertCheck.result.root.hash);
+						if (!pqcertRoot) {
+							return { error: 'pqcertRoot is not found' }
+						}
+						blockTx.addPqcert(pqcertRoot);
+						pqcertHashTable[pqcertCheck.result.root.hash] = true;
+					}
+				}
+
+				for (let i = 0; i < pqcertCheck.result.pubHashs.length; i++) {
+					if (!pqcertCheck.result.pubHashs[i].check) {
+						if (!pqcertHashTable[pqcertCheck.result.pubHashs[i].hash]) {
+							let PqcertPubKey = this.wallet.getPqcertPubKeyByHash(pqcertCheck.result.pubHashs[i].hash);
+							if (!PqcertPubKey) {
+								return { error: 'ERROR: PqcertPubKey is not found' }
+							}
+							blockTx.addPqcert(PqcertPubKey);
+							pqcertHashTable[pqcertCheck.result.pubHashs[i].hash] = true;
+						}
+					}
+				}
+			}
+		}
+
+		let aesKey: SafePasswordBuf;
+		if (this.wallet.isEncryption()) {
+			let ans = await rlQuestion(this.rl, 'Please enter your password: ', { passwordMode: true });
+			aesKey = new SafePasswordBuf(shake256(Buffer.from(ans, 'utf8')));
+		}
+
+		let signedTx = this.wallet.signTxMultiAddress(addressList, blockTx, feeRatio, undefined, aesKey);
+		if (!signedTx) {
+			return { error: 'ERROR: signTx failed' };
+		}
+
+		let json = signedTx.json;
+		if (!json) {
+			return { error: 'ERROR: ???' };
+		}
+
+		if (!rawFlag) {
+			return { result: json };
+		}
+
+		let raw = signedTx.getSerialize();
+		if (!raw) {
+			return { error: 'ERROR: ???' };
+		}
+
+		if (tempFlag) {
+			this.txTemp = signedTx;
+		}
+
+		return { result: { json, raw: raw.toString('hex') } };
+	}
+
 	/**
 	 * Get Temporary transaction data.
 	 * @param {boolean} rawFlag Whether the transaction is expressed in raw.
@@ -1527,23 +2414,25 @@ class WalletCli {
 	}
 
 	async exit(noQuestion?: boolean) {
-		if(noQuestion) {
+		if (noQuestion) {
 			this.rl.pause();
-			if(this.wallet) {
+			if (this.wallet) {
 				await this.wallet.exit();
 			}
+			this.postRequest.exit();
 			process.exit();
 		}
 		else {
 			let ans = await rlQuestion(this.rl, 'Sure you want to exit? (y/n): ');
 			if (ans.match(/^y(es)?$/i)) {
 				this.rl.pause();
-				if(this.wallet) {
+				if (this.wallet) {
 					await this.wallet.exit();
 				}
+				this.postRequest.exit();
 				process.exit();
 			}
-			else{
+			else {
 				return { error: 'Cancelled.' };
 			}
 		}
@@ -1605,23 +2494,39 @@ class WalletCli {
 			return { error: 'ERROR: no wallet.' };
 		}
 
-		console.log('-------------------- Wallet details --------------------'.padEnd(process.stdout.columns, '-'));
+		let allSignSys = getSignSysAll().map((x, i) => ({ version: 0, signType: i, signSysName: x.signSysName }));
+		let tableStr = '';
+		let sst = {};
+		for (let i = 0; i < allSignSys.length; i++) {
+			sst[`S${allSignSys[i].signType}`] = allSignSys[i].signSysName;
+		}
+		tableStr += "Sign type table:\n";
+		tableStr += getTableStr(sst, undefined, { value: "L" }) + "\n";
+
+		let wl: any[] = Array(kp.length);
 		for (let i = 0; i < kp.length; i++) {
 			let addressList = this.wallet.getAddressesList(kp[i].id);
 			if (!addressList) {
 				return { error: `ERROR: Get wallet ${kp[i].id} addresses list failed.` };
 			}
-			console.log('\x1b[33m%s\x1b[0m', `Wallet ${kp[i].id}${i === this.wallet.getNowWid() ? ' - Now' : '' }`);
-			console.log(`Label	 \t: ${kp[i].label != undefined ? kp[i].label : ''}`);		
-			console.log(`Encryption\t: ${kp[i].encryptionFlag}`);	
-			console.log(`Address amount\t: ${addressList.length}`);	
-			console.log(`Keypairs\t: ${kp[i].keypairs.join(', ')}`);
-			if (i < kp.length - 1) {
-				console.log();
+			wl[kp[i].id] = {
+				label: kp[i].label != undefined ? kp[i].label : '',
+				Encryption: kp[i].encryptionFlag,
+				"Address amount": addressList.length
+			};
+			for (let j = 0; j < allSignSys.length; j++) {
+				if (kp[i].keypairs.find(element => element === allSignSys[j].signSysName)) {
+					wl[kp[i].id][`S${allSignSys[j].signType}`] = "V";
+				}
+				else {
+					wl[kp[i].id][`S${allSignSys[j].signType}`] = " ";
+				}
 			}
 		}
-		console.log('------------------ Wallet details End ------------------'.padEnd(process.stdout.columns, '-'));
 
+		tableStr += "Wallet list: \x1b[33m[(index) is wid.]\x1b[0m\n";
+		tableStr += getTableStr(wl, undefined, { label: "L", Encryption: "L" });
+		console.log(tableStr);
 		return { result: undefined }
 	}
 
@@ -1653,56 +2558,66 @@ class WalletCli {
 
 		let obj = jsonParse(r.data);
 		if (obj.error) {
-			return { err: `ERROR:${obj.error}`}
+			return { err: `ERROR:${obj.error}` }
 		}
-		if(this.wallet) {
+		if (this.wallet) {
 			obj.result['nowWalletID'] = this.wallet.getNowWid();
+		}
+
+		if (this.jsonTable) {
+			let tableStr = '';
+			tableStr += getTableStr(obj.result, undefined, { index: "R", value: "L" });
+			return { result: obj.result, tableStr };
 		}
 		return obj;
 	}
 
 	cliMethod =
-	{
-		help: this.help,
-		//------- console set -------
-		setJsonSpace: this.setJsonSpace,
-		setJsonColor: this.setJsonColor,
-		clear: this.clear,
-		exit: this.exit,
-		getStatus: this.getStatus,
-		//------- wallet -------
-		generateWallet: this.generateWallet,
-		importWalletFile: this.importWalletFile,
-		exportWalletFile: this.exportWalletFile,
-		walletGetSignSysList: this.walletGetSignSysList,
-		walletAddAddress: this.walletAddAddress,
-		walletGetAddressList: this.walletGetAddressList,
-		walletGetAddressDetails: this.walletGetAddressDetails,
-		walletGetBalance: this.walletGetBalance,
-		walletCreateNewTransation: this.walletCreateNewTransation,
-		walletSend: this.walletSend,
-		walletGetTxList: this.walletGetTxList,
-		walletGetUTXOList: this.walletGetUTXOList,
-		walletAutoWatch: this.walletAutoWatch,
-		switchWallet: this.switchWallet,
-		getWalletList: this.getWalletList,
-		//------- tx -------
-		txAddPqcertRoot: this.txAddPqcertRoot,
-		txAddPqcertPubKey: this.txAddPqcertPubKey,
-		getTxTemp: this.getTxTemp,
-		//------- sign -------
-		checkSignPqcert: this.checkSignPqcert,
-		signTx: this.signTx,
-		clearTxTemp: this.clearTxTemp,
-		//------- send -------
-		sendTxTemp: this.sendTxTemp,
-		sendTx: this.sendTx,
-		//------- mine -----
-		mine: this.mine,
-		//------- transform -------
-		blockTxJson2Raw: this.blockTxJson2Raw,
-		blockTxRaw2Json: this.blockTxRaw2Json,
-	}
+		{
+			help: this.help,
+			//------- console set -------
+			setJsonSpace: this.setJsonSpace,
+			setJsonColor: this.setJsonColor,
+			setJsonTable: this.setJsonTable,
+			clear: this.clear,
+			exit: this.exit,
+			getStatus: this.getStatus,
+			//------- wallet -------
+			generateWallet: this.generateWallet,
+			importWalletFile: this.importWalletFile,
+			exportWalletFile: this.exportWalletFile,
+			walletGetSignSysList: this.walletGetSignSysList,
+			walletAddAddress: this.walletAddAddress,
+			walletGetAddressList: this.walletGetAddressList,
+			walletGetAddressDetails: this.walletGetAddressDetails,
+			walletGetBalance: this.walletGetBalance,
+			walletCreateTransation: this.walletCreateTransation,
+			walletCreateAdvancedTransation: this.walletCreateAdvancedTransation,
+			walletASend: this.walletASend,
+			walletSend: this.walletSend,
+			walletSendMany: this.walletSendMany,
+			walletGetTxList: this.walletGetTxList,
+			walletGetUTXOList: this.walletGetUTXOList,
+			walletAutoWatch: this.walletAutoWatch,
+			switchWallet: this.switchWallet,
+			getWalletList: this.getWalletList,
+			//------- tx -------
+			txAddPqcertRoot: this.txAddPqcertRoot,
+			txAddPqcertPubKey: this.txAddPqcertPubKey,
+			getTxTemp: this.getTxTemp,
+			//------- sign -------
+			checkSignPqcert: this.checkSignPqcert,
+			signTx: this.signTx,
+			clearTxTemp: this.clearTxTemp,
+			//------- send -------
+			sendTxTemp: this.sendTxTemp,
+			sendTx: this.sendTx,
+			//------- mine -----
+			mine: this.mine,
+			//------- transform -------
+			blockTxJson2Raw: this.blockTxJson2Raw,
+			blockTxRaw2Json: this.blockTxRaw2Json,
+		}
 
 	set txTemp(blockTx: BlockTx) {
 		this._txTemp = blockTx;

@@ -2,7 +2,7 @@ import { methodParamsType } from "./cliArg";
 
 let methodParamssHelp = {
 	//------- cli -------
-	
+
 	help: {
 		simple: `help [ method?: string ] [ detail?: boolean ]`,
 		detail: `help
@@ -15,7 +15,7 @@ Show usage of the method. If not set show all method.
 Show more detail.
 `
 	},
-	
+
 	setJsonSpace: {
 		simple: `setJsonSpace [ indent: boolean ]`,
 		detail: `setJsonSpace
@@ -136,7 +136,7 @@ Result:
 	...
 ]
 `
-	},	
+	},
 	walletGetAddressDetails: {
 		simple: `walletGetAddressDetails [ address: string ] [ origin: boolean = false ]`,
 		detail: `walletGetAddressDetails
@@ -149,7 +149,7 @@ The wallet address.
 show address origin data.
 `
 	},
-	
+
 	walletGetBalance: {
 		simple: `walletGetBalance #Returns the total available balance for all wallet address.`,
 		detail: `walletGetBalance
@@ -201,9 +201,66 @@ Fee ratio. Do not less than 1.
 check Flag. Whether to make the final confirmation.
 `
 	},
-	walletCreateNewTransation: {
-		simple: `walletCreateNewTransation [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ extraValue: number = 10000 ] [ rawFlag: boolean = true ] [ tempFlag: boolean = true ]`,
-		detail: `walletCreateNewTransation
+	walletSendMany: {
+		simple: `walletSendMany [ srcAddress: string ] [ target: { address: string, value: string }[] ] [ signSelect: number[], [ opReturnStr: string, [ feeRatio: number=1, [ useAllUTXO: boolean, [ changeAddress: string, [ checkFlag: boolean ]]]]]] #Send to multiple addresses.`,
+		detail: `walletSendMany
+Send to multiple addresses.
+
+Arguments:
+1. srcAddress (type string, required)
+Send address.
+
+2. target (type Array, required)
+Target address and amount.
+Format:
+{ address: string, value: string }[]
+Example:
+[{"address":"address1","value":"100"},{"address":"address2","value":"100"}]
+
+3. signSelect (type number[], optional)
+This transaction is signed using the selected signature. And the length of the signature is related to the renewal fee.
+
+4. opReturnStr (type string, optional)
+Message
+
+5. feeRatio (type number, optional, default = 1)
+Fee ratio. Do not less than 1. 
+
+6. useAllUTXO (type boolean, optional)
+Whether to use all the UTXO.
+
+7. changeAddress (type string, optional)
+Address for change.
+
+8. checkFlag (type boolean, optional, default = true)
+check Flag. Whether to make the final confirmation.
+`
+	},
+	walletASend: {
+		simple: `walletASend [ srcAddressList: string[] ] [ target: {address: string, value: string }[]} ]  [ feeRatio: number=1 ] #Advanced walletSend.`,
+		detail: `walletASend 
+Advanced walletSend.
+
+Arguments:
+1. srcAddress (type string[], required)
+Send address.
+Example:
+["address1","address2","address3",...]
+
+2. target (type object[], required)
+Target address and amount.
+Format:
+{ address: string, value: string }[]
+Example:
+[{"address":"address1","value":"100"},{"address":"address2","value":"100"}]
+
+3. feeRatio (type number, optional, default = 1)
+Fee ratio. Do not less than 1. 
+`
+	},
+	walletCreateTransation: {
+		simple: `walletCreateTransation [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ extraValue: number = 10000 ] [ rawFlag: boolean = true ] [ tempFlag: boolean = true ]`,
+		detail: `walletCreateTransation
 Add a new transaction.
 		
 Arguments:
@@ -450,9 +507,9 @@ Arguments:
 }
 `
 	},
-	createNewTransation: {
-		simple: `createNewTransation [ data: object ] [ replaceLS: boolean = false ] [ rawFlag: boolean = false ]`,
-		detail: `createNewTransation
+	createTransation: {
+		simple: `createTransation [ data: object ] [ replaceLS: boolean = false ] [ rawFlag: boolean = false ]`,
+		detail: `createTransation
 		
 Arguments:
 1. data (type object, required) 
@@ -558,31 +615,31 @@ Arguments:
 Monitor the address.
 `
 	},
-	
+
 	walletAutoWatch: {
 		simple: `walletAutoWatch`,
 		detail: `walletAutoWatch
 Monitor all addresses of the wallet.`
 	},
 	walletGetTxList: {
-		simple: `walletGetTxList [ address: string | string[] ] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
+		simple: `walletGetTxList [ address: string ] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
 		detail: `walletGetTxList
 Get transactions for single or multiple addresses.
 
 Arguments:
-1. address (type string or string[], required) 
+1. address (type string, required) 
 2. limit (type number, default = 20)
 3. skip (type number, default = 0)
 4. reverse (type boolean, default: true)
 `
 	},
 	walletGetUTXOList: {
-		simple: `walletGetUTXOList [ address: string | string[] ] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
+		simple: `walletGetUTXOList [ address: string] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
 		detail: `walletGetUTXOList
 Get unused transactions for single or multiple addresses.
 
 Arguments:
-1. address (type string or string[], required) 
+1. address (type string, required) 
 2. limit (type number, default = 20)
 3. skip (type number, default = 0)
 4. reverse (type boolean, default: true)

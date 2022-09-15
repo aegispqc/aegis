@@ -177,14 +177,13 @@ class P2PAddress {
 	 * @returns {boolean}
 	 */
 	static isPrivate(ip: string): boolean {
-		// let isPrivateIp = ip.match(/(^127\.)|(^192\.168\.)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^::1$)|(^[fF][cCdD])/);
-		// if (Array.isArray(isPrivateIp) && isPrivateIp.length > 0) {
-		// 	return true;
-		// }
-		// else {
-		// 	return false;
-		// }
-		return false;
+		let isPrivateIp = ip.match(/(^127\.)|(^192\.168\.)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^::1$)|(^[fF][cCdD])/);
+		if (Array.isArray(isPrivateIp) && isPrivateIp.length > 0) {
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
 
 	/**
@@ -308,6 +307,24 @@ class P2PAddress {
 		return this.#p2pStatusDb.updatePeerIsRelay(ipPortStr, relay);
 	}
 	/**
+	 * Update the network version of the peer
+	 * @param {string} ipPortStr (ip + port) string
+	 * @param {number} updateTime now Date ms
+	 * @returns 
+	 */
+	updatePeerVersion(ipPortStr: string, version: number) {
+		return this.#p2pStatusDb.updatePeerVersion(ipPortStr, version);
+	}
+	/**
+	 * Update the subVersion of the peer
+	 * @param {string} ipPortStr (ip + port) string
+	 * @param {number} updateTime now Date ms
+	 * @returns 
+	 */
+	updatePeerSubVersion(ipPortStr: string, subVersion: string) {
+		return this.#p2pStatusDb.updatePeerSubVersion(ipPortStr, subVersion);
+	}
+	/**
 	 * Update the data of the peer
 	 * @param {string} ipPortStr (ip + port) string
 	 * @param {number} updateTime now Date ms
@@ -315,8 +332,8 @@ class P2PAddress {
 	 * @param {boolean} relay the peer is relay node
 	 * @returns 
 	 */
-	updatePeer(ipPortStr: string, updateTime: number, services: bigint, relay: boolean) {
-		return this.#p2pStatusDb.updatePeer(ipPortStr, updateTime, services, relay);
+	updatePeer(ipPortStr: string, updateTime: number, version: number, subVersion: string, services: bigint, relay: boolean) {
+		return this.#p2pStatusDb.updatePeer(ipPortStr, updateTime, version, subVersion, services, relay);
 	}
 
 	/**
@@ -336,7 +353,7 @@ class P2PAddress {
 				lastConnectTime: 0
 			}
 		}
-		if (++this.#connectTimeoutCache[ipPortStr].timeoutCount > 9) {
+		if (++this.#connectTimeoutCache[ipPortStr].timeoutCount > 5) {
 			delete this.#connectTimeoutCache[ipPortStr];
 			let data = this.getPeer(ipPortStr);
 			if (data && typeof data.status?.updateTime === 'number'

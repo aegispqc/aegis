@@ -168,10 +168,10 @@
             }
         }
 
-**walletCreateNewTransation**: srcAddress:string tgtAddress:string value:number extraValue:number=10000 rawFlag:boolean=true, tempFlag:boolean=true
+**walletCreateTransation**: srcAddress:string tgtAddress:string value:number extraValue:number=10000 rawFlag:boolean=true, tempFlag:boolean=true
 -------
 
-        walletCreateNewTransation
+        walletCreateTransation
         Add a new transaction.
                 
         Arguments:
@@ -425,10 +425,10 @@
         }
 
 
-**createNewTransation**: data:obj replaceLS:boolean=false rawFlag:boolean=false
+**createTransation**: data:obj replaceLS:boolean=false rawFlag:boolean=false
 -------
 
-        createNewTransation
+        createTransation
                 
         Arguments:
         1.data (type object, required) 

@@ -316,7 +316,7 @@ export default class P2P {
 					peer.setListenPort(addrSource.listenPort);
 				}
 			}
-			this.#addrTable.updatePeer(ipPortStr, Date.now(), addrSource.services, addrSource.relay)
+			this.#addrTable.updatePeer(ipPortStr, Date.now(), addrSource.version, addrSource.subVersion, addrSource.services, addrSource.relay)
 		});
 
 		/**
@@ -340,6 +340,7 @@ export default class P2P {
 				this.#addrTable.connectTimeout(peer.ipPortStr, true);
 			}
 			if (this.#connectedIp[uid] && this.#connectedIp[uid].ipPortStr === peer.ipPortStr) {
+				this.#p2pEvent.emit('p2pDisconnection', { ip: peer.ip, port: peer.port, isMalicious, isTimeout });
 				if (peer.isPassiveConnect) {
 					this.#connectedType.passive--;
 				}
@@ -349,7 +350,6 @@ export default class P2P {
 				this.#connectedIp[uid].disconnect();
 				delete this.#connectedIp[uid];
 			}
-			this.#p2pEvent.emit('p2pDisconnection', { ip: peer.ip, port: peer.port, isMalicious, isTimeout });
 			this.#fillConnect();
 		});
 
@@ -445,7 +445,10 @@ export default class P2P {
 			this.#fillConnect();
 		}
 		this.#map((peer) => {
-			this.#addrTable.updatePeerTime(peer.ipPortStr, peer.networkStatus.time.lastComm);
+			let status = peer.status;
+			if (typeof status.listenPort === 'number' && status.listenPort > 0) {
+				this.#addrTable.updatePeerTime(AddrTable.getIpPortString(peer.ip, status.listenPort), status.networkStatus.time.lastComm);
+			}
 		});
 	}
 

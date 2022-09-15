@@ -1,4 +1,4 @@
-import BlockHeader  from './blockchain/blockHeader';
+import BlockHeader from './blockchain/blockHeader';
 import { BlockTx, OpReturn } from './blockchain/blockTx';
 import BlockData from './blockchain/blockData';
 import { BlockchainDb, BlockDataFormat, lastVoutSpentData, pqcertIndexData, txIndexData } from './db/lmdb/blockchainDb';
@@ -50,7 +50,7 @@ class Core {
 		this.nowHeight = lastBlock.height;
 		this.nowHash = lastBlock.hash.toString('hex');
 		this.nowBlockVersion = getVersionByHeight(this.nowHeight);
-		
+
 		return true;
 	}
 
@@ -443,12 +443,11 @@ class Core {
 	 * @param {object[]} vout 
 	 * @param {Buffer} vout[].address Receiving address.
 	 * @param {bigint} vout[].value Send amount.
-	 * @param {Buffer} changeAddess Change address.
 	 * @param {Buffer} opReturn opReturn.
 	 * @param {boolean} replaceLS Automatic replacement of unlock for transaction vin.
 	 * @returns {false|BlockTx[]} If complete return `BlockTx` else return false.
 	 */
-	createNewTransation(vin: { txid: Buffer, voutn: number }[][], vout: { address: Buffer, value: bigint }[], changeAddess: Buffer, opReturn: Buffer = Buffer.from(''), replaceLS: boolean = false): false | { inValue: bigint, blockTx: BlockTx } {
+	createTransation(vin: { txid: Buffer, voutn: number }[][], vout: { address: Buffer, value: bigint }[], opReturn: Buffer = Buffer.from(''), replaceLS: boolean = false): false | { inValue: bigint, blockTx: BlockTx } {
 		let inValue = 0n;
 		let outValue = 0n;
 		let thisVin = [];
@@ -504,17 +503,9 @@ class Core {
 
 		let changeValue = inValue - outValue;
 
-		if (changeValue <= 0n) {
+		if (changeValue < 0n) {
 			return false;
 		}
-
-		if (changeAddess.length !== 32) {
-			return false;
-		}
-		thisVout.push({
-			value: changeValue.toString(10),
-			lockScript: `20${changeAddess.toString('hex')}fc`
-		});
 
 		let blockTx = BlockTx.jsonDataToClass({
 			version: 0,

@@ -93,9 +93,6 @@ class P2pStatusDb {
 		});
 		this.blacklistDb = this.dbRoot.openDB({ name: `blacklist`, keyIsBuffer: true });
 		this.peerDb = this.dbRoot.openDB({ name: `peerlist`, keyIsBuffer: true });
-
-		//------- Try to read the database -------
-		console.log('p2p peer list', this.getPeerList());
 	}
 
 	/**
@@ -223,7 +220,7 @@ class P2pStatusDb {
 			return false;
 		}
 		let now = Date.now();
-		return await this.peerDb.put(ipPortBuf, { addTime: now, updateTime: now, services: 0n, relay: false, permanent: isPermanent });
+		return await this.peerDb.put(ipPortBuf, { addTime: now, updateTime: now, services: 0n, version: 0, subVersion: '0.0.0', relay: false, permanent: isPermanent });
 	}
 
 	async deletePeer(ipPortStr: string) {
@@ -258,7 +255,7 @@ class P2pStatusDb {
 		return Object.assign({ status: data }, ipPortBufToObj(ipPortBuf));
 	}
 
-	async updatePeer(ipPortStr: string, updateTime: number, services: bigint, relay: boolean) {
+	async updatePeer(ipPortStr: string, updateTime: number, version: number, subVersion: string, services: bigint, relay: boolean) {
 		let ipPortBuf = ipPortStrToBuf(ipPortStr);
 		if (!ipPortBuf) {
 			return false;
@@ -269,6 +266,12 @@ class P2pStatusDb {
 		}
 		if (updateTime > data.updateTime) {
 			data.updateTime = updateTime;
+		}
+		if (typeof version === 'number') {
+			data.version = version;
+		}
+		if (typeof subVersion === 'string') {
+			data.subVersion = subVersion;
 		}
 		if (typeof services === 'bigint') {
 			data.services = services;
@@ -323,6 +326,38 @@ class P2pStatusDb {
 		}
 		if (typeof relay === 'boolean') {
 			data.relay = relay;
+		}
+
+		return await this.peerDb.put(ipPortBuf, data);
+	}
+
+	async updatePeerVersion(ipPortStr: string, version: number) {
+		let ipPortBuf = ipPortStrToBuf(ipPortStr);
+		if (!ipPortBuf) {
+			return false;
+		}
+		let data = this.peerDb.get(ipPortBuf);
+		if (!data) {
+			return false;
+		}
+		if (typeof version === 'number') {
+			data.version = version;
+		}
+
+		return await this.peerDb.put(ipPortBuf, data);
+	}
+
+	async updatePeerSubVersion(ipPortStr: string, subVersion: string) {
+		let ipPortBuf = ipPortStrToBuf(ipPortStr);
+		if (!ipPortBuf) {
+			return false;
+		}
+		let data = this.peerDb.get(ipPortBuf);
+		if (!data) {
+			return false;
+		}
+		if (typeof subVersion === 'string') {
+			data.subVersion = subVersion;
 		}
 
 		return await this.peerDb.put(ipPortBuf, data);

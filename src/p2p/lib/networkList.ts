@@ -4,7 +4,8 @@ const mainNet = {
 	"networkMagic": 0xCABE277A,
 	"dnsSeeds": [],
 	"ip": [
-		'185.191.236.243'
+		'185.191.236.243',
+		'185.191.236.245'
 	]
 }
 
@@ -13,9 +14,7 @@ const testNet = {
 	"alias": "testnet",
 	"networkMagic": 0xEDF1DFED,
 	"dnsSeeds": [],
-	"ip": [
-		'185.191.236.243'
-	]
+	"ip": []
 }
 
 export default { mainNet, testNet }

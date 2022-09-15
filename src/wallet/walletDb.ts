@@ -100,7 +100,7 @@ class WalletDb {
 			if (this.keypairIsExist(thisId)) {
 				return false;
 			}
-			
+
 			for (let i = 0; i < data.keypairs.length; i++) {
 				let pqcertPubKeyJson: PQCertPubKeyJsonData = {
 					version: data.keypairs[i].version,
@@ -108,7 +108,7 @@ class WalletDb {
 					signType: data.keypairs[i].signType,
 					pubKey: data.keypairs[i].publicKey.toString('hex')
 				};
-				
+
 				let pqcertPubKey = creatPQCertPubKey(pqcertPubKeyJson);
 				if (!pqcertPubKey) {
 					return false;
@@ -119,7 +119,7 @@ class WalletDb {
 				}
 				data.keypairs[i].hash = hash;
 			}
-			
+
 
 			let suc = await this.keyPairDb.put(thisId, data);
 			if (suc) {
@@ -127,7 +127,7 @@ class WalletDb {
 			}
 			return false;
 		});
-		
+
 		if (r.taskErr) {
 			return false;
 		}
@@ -192,7 +192,7 @@ class WalletDb {
 			if (this.addressDb.doesExist(addressKeyBuffer.buf)) {
 				return false;
 			}
-			if(this.addressDoesExist(wid, hash)) {
+			if (this.addressDoesExist(wid, hash)) {
 				return false;
 			}
 
@@ -223,7 +223,7 @@ class WalletDb {
 	getKeyPairList(raw: boolean = false) {
 		let data = [];
 		for (let { key, value } of this.keyPairDb.getRange({ start: keyU32Start, end: keyU32End, snapshot: false })) {
-			if(!raw) {
+			if (!raw) {
 				let kps = [];
 				for (let i = 0; i < value.keypairs.length; i++) {
 					let Ss = getSignSys(value.keypairs[i].signType);
@@ -269,7 +269,7 @@ class WalletDb {
 		for (let { key, value } of this.addressDb.getRange({ start, snapshot: false })) {
 			let ak = new AddressKeyBuffer(key);
 
-			if(hash.equals(ak.hash)) {
+			if (hash.equals(ak.hash)) {
 				value.pqcertRoot = creatPQCertRoot(value.pqcertRoot);
 				return value;
 			}
@@ -309,7 +309,7 @@ class WalletDb {
 		let fakeCount = 0;
 		for (let { value } of this.addressDb.getRange({ start: start.buf, end: end.buf, snapshot: false })) {
 			value.addressSeed.keys.forEach((x) => {
-				if(x === -1) {
+				if (x === -1) {
 					fakeCount++;
 				}
 			});
@@ -322,7 +322,7 @@ class WalletDb {
 		for (let key of this.addressDb.getKeys({ start, snapshot: false })) {
 			let ak = new AddressKeyBuffer(key);
 
-			if(address.equals(ak.hash)) {
+			if (address.equals(ak.hash)) {
 				return true;
 			}
 		}

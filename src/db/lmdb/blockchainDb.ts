@@ -35,10 +35,10 @@ type getTxReturn = {
 }
 
 class BlockchainDb {
-	private dbRoot: any;
-	private coveredDb: any
-	private blockDb: any;
-	private statusDb: any;
+	private dbRoot: lmdb.RootDatabase;;
+	private coveredDb: lmdb.Database;
+	private blockDb: lmdb.Database;
+	private statusDb: lmdb.Database;
 	private indexDb: IndexDb;
 
 	constructor(dbPath: string) {
@@ -56,7 +56,7 @@ class BlockchainDb {
 			maxReaders: 1
 		});
 		/** Block db */
-		this.blockDb = this.dbRoot.openDB({ name: 'block_data', keyIsBuffer: true });
+		this.blockDb = this.dbRoot.openDB({ name: 'block_data', keyEncoding: 'binary' });
 		/** Status db */
 		this.statusDb = this.dbRoot.openDB({ name: 'block_status' });
 		/** Index db */

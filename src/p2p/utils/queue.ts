@@ -26,7 +26,7 @@ export class Queue {
 		this.#queue.push(data);
 	}
 
-	priorityAdd(data){
+	priorityAdd(data) {
 		this.#queue.unshift(data);
 	}
 

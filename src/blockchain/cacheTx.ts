@@ -6,7 +6,10 @@ type CacheData = {
 	time: number;
 	feeRatio: number;
 	address: {
-		[key: string]: boolean;
+		[key: string]: {
+			sendValue: 0n;
+			receiveValue: 0n;
+		};
 	};
 	mining?: boolean;
 };
@@ -25,7 +28,10 @@ type CacheList = {
 	feeRatio: number;
 	address?:
 	{
-		[key: string]: boolean
+		[key: string]: {
+			sendValue: 0n;
+			receiveValue: 0n;
+		};
 	};
 }[];
 
@@ -211,7 +217,7 @@ class CacheTx {
 	}
 
 	deleteMiningByHash(hash: string) {
-		if(this.miningTx[hash]) {
+		if (this.miningTx[hash]) {
 			delete this.miningTx[hash];
 		}
 	}

@@ -33,27 +33,6 @@ export default class GetBlocks extends protoMessage {
 		this._MAX_POSSIBLE_GET = 500;
 	}
 
-	async #verifyBlocksSimplified(blocks: Buffer[]) {
-		if (blocks.length === 0) return 0;
-		let getBlockHeight = true;
-		let verifiedHeight = 0;
-		for (let i = 0; i < blocks.length; i++) {
-			let isExist = await this.task.blockHashDoesExist(blocks[i]);
-			if (!isExist) {
-				getBlockHeight = true;
-				verifiedHeight = 0;
-			}
-			else if (getBlockHeight) {
-				let block = await this.task.getBlockDataByHash(blocks[i]);
-				if (block) {
-					verifiedHeight = block.height;
-					getBlockHeight = false;
-				}
-			}
-		}
-		return verifiedHeight;
-	}
-
 	async #verifyBlocks(startHeight: number, blocks: Buffer[]) {
 		if (startHeight <= 0 || blocks.length === 0) return 0;
 		let lastBlock = await this.task.getLastBlock();
@@ -107,21 +86,14 @@ export default class GetBlocks extends protoMessage {
 		else {
 			return null;
 		}
-		let senderLastHeight = -1;
 		let verifiedHeight = 0;
-		if (br.isEnd() || br.remainLen === 32) {
-			verifiedHeight = await this.#verifyBlocksSimplified(blocks);
-		}
-		else {
-			senderLastHeight = br.uint32();
-			let startHeight = br.uint32();
-			if (senderLastHeight === null || startHeight === null) {
-				verifiedHeight = await this.#verifyBlocksSimplified(blocks);
-			}
-			else {
-				verifiedHeight = await this.#verifyBlocks(startHeight, blocks);
-			}
-		}
+        let senderLastHeight = br.uint32();
+        let startHeight = br.uint32();
+        if (senderLastHeight === null || startHeight === null) {
+            return null;
+        }
+        verifiedHeight = await this.#verifyBlocks(startHeight, blocks);
+
 		return {
 			data: {
 				version,

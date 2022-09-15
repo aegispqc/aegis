@@ -1,9 +1,11 @@
 import { MQPHash } from '../crypto/MQPHash';
 import { equationsOffset, verifyPoW } from '../blockchain/pow';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
-import os from 'os';
 import { MinerFix } from './minerFix';
 import { minerController } from './minerController';
+import { constants } from 'fs';
+import fs from 'fs/promises';
+import { shake256 } from '../crypto/hash';
 
 class Mine {
 	private m: number;
@@ -40,9 +42,19 @@ class Mine {
 	}
 
 	async cal(fix?: string): Promise<{ err?: string, errCode?: number, result?: any }> {
-		return new Promise((r) => {
+		return new Promise(async (r) => {
 			if (this._minerController.minerBinPath == undefined) {
+				console.log('no path!');
 				r({ err: 'no path!' });
+				return;
+			}
+			
+			let minerBin = await fs.readFile(this._minerController.minerBinPath);
+			let mbSha = shake256(minerBin);
+			if (!mbSha.equals(this._minerController.minerBinHash)) {
+				console.log('minerBinHash was change!');
+				r({ err: 'minerBinHash was change!' });
+				return;
 			}
 
 			let equations;
@@ -183,9 +195,19 @@ class Mine {
 	}
 
 	async getDeviceCount(): Promise<any> {
-		return new Promise((r) => {
+		return new Promise(async (r) => {
 			if (this._minerController.minerBinPath == undefined) {
+				console.log('no path!');
 				r({ err: 'no path!' });
+				return;
+			}
+			
+			let minerBin = await fs.readFile(this._minerController.minerBinPath);
+			let mbSha = shake256(minerBin);
+			if (!mbSha.equals(this._minerController.minerBinHash)) {
+				console.log('minerBinHash was change!');
+				r({ err: 'minerBinHash was change!' });
+				return;
 			}
 
 			let str = '';
@@ -213,9 +235,19 @@ class Mine {
 	}
 
 	async getNumOfExecution(): Promise<any> {
-		return new Promise((r) => {
+		return new Promise(async (r) => {
 			if (this._minerController.minerBinPath == undefined) {
+				console.log('no path!');
 				r({ err: 'no path!' });
+				return;
+			}
+			
+			let minerBin = await fs.readFile(this._minerController.minerBinPath);
+			let mbSha = shake256(minerBin);
+			if (!mbSha.equals(this._minerController.minerBinHash)) {
+				console.log('minerBinHash was change!');
+				r({ err: 'minerBinHash was change!' });
+				return;
 			}
 
 			let str = '';

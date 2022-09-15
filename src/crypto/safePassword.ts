@@ -1,7 +1,7 @@
 class SafePasswordBuf {
 	private buf?: Buffer;
 	private autoFreeTime: number;
-	private time?: ReturnType <typeof setTimeout>;
+	private time?: ReturnType<typeof setTimeout>;
 	constructor(buf: Buffer, autoFreeTime: number = 5000) {
 		this.buf = buf;
 		this.autoFreeTime = autoFreeTime;
@@ -9,24 +9,24 @@ class SafePasswordBuf {
 	}
 
 	private timeStart() {
-		if(this.time) {
+		if (this.time) {
 			clearTimeout(this.time);
 		}
-		this.time = setTimeout( ()=> {
+		this.time = setTimeout(() => {
 			this.free();
 		}, this.autoFreeTime)
 	}
 
 	free() {
-		if(this.buf) {
+		if (this.buf) {
 			this.buf.fill(0);
 			delete this.buf;
 		}
 		clearTimeout(this.time);
 	}
 
-	get data(){
-		if(!this.buf) {
+	get data() {
+		if (!this.buf) {
 			console.error('ERROR: buf is free!');
 			return undefined;
 		}

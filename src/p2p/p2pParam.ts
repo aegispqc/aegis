@@ -1,6 +1,6 @@
 
 // common
-const Version: number = 1;
+const Version: number = 2;
 
 // network
 // server defalut listen port

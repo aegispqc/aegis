@@ -45,11 +45,11 @@ export class BufferQueue {
 		if (this.#waitBufferIndex + buffer.length >= this.#waitBuffer.length) {
 			let end = this.#waitBuffer.length - this.#waitBufferIndex;
 			buffer.copy(this.#waitBuffer, this.#waitBufferIndex, 0, end);
-			if(buffer.length > end){
+			if (buffer.length > end) {
 				this.#addRemain(buffer.subarray(end))
 			}
 			let r = await this.#pushMessage(this.#waitBuffer);
-			if(r){
+			if (r) {
 				this.#waitBuffer = undefined;
 				this.#waitBufferIndex = 0;
 			}
@@ -106,7 +106,7 @@ export class BufferQueue {
 		return false;
 	}
 
-	async #pushMessage(buffer: Buffer): Promise<boolean>{
+	async #pushMessage(buffer: Buffer): Promise<boolean> {
 		let r = await this.#checkData(buffer);
 		if (r && r.data) {
 			await this.#cb(r.data);

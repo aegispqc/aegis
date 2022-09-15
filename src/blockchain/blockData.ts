@@ -1,4 +1,4 @@
-import BlockHeader  from "./blockHeader";
+import BlockHeader from "./blockHeader";
 import { BlockTx, OpReturn } from "./blockTx";
 import { MerkleTree } from "../crypto/merkleTree";
 import { getCompactSizeBufferByNumber } from "./util";
@@ -161,7 +161,7 @@ class BlockData {
 					this.lastVout[hash] = {};
 				}
 				else {
-					if (this.lastVout[hash][voutn]) { //Re-use
+					if (this.lastVout[hash][voutn]) { //double-spend
 						return { err: -5 };
 					}
 				}
@@ -268,7 +268,6 @@ class BlockData {
 		}
 
 		let totalPhoton = this.blockHeader.serialize.length;
-
 		//Comparison with local time
 		if (thisTime !== 0) {
 			let blockTime = this.blockHeader.getTime();
@@ -276,7 +275,6 @@ class BlockData {
 				return false;
 			}
 		}
-
 		//merkleroot
 		let txids = [];
 		for (let i = 0; i < this.txs.length; i++) {
@@ -289,7 +287,6 @@ class BlockData {
 		if (!merkleroot.root.equals(this.blockHeader.getMerkleroot())) {
 			return false;
 		}
-
 		//Double flower verification for duplicate use of the same vout & n; and duplicate pqcert
 		let lastVout = {};
 		let pqcert = {};
@@ -328,7 +325,7 @@ class BlockData {
 						lastVout[hash] = {};
 					}
 					else {
-						if (lastVout[hash][voutn]) { //Re-use
+						if (lastVout[hash][voutn]) { //double-spend
 							return false;
 						}
 					}
@@ -371,7 +368,6 @@ class BlockData {
 	}
 
 	lastVoutIsExist(hash: string, n: number) {
-
 		if (this.lastVout[hash]) {
 			if (this.lastVout[hash][n]) {
 				return true;
@@ -383,9 +379,7 @@ class BlockData {
 
 	static dataFormatToClass(dataFormat: BlockDataFormat): BlockData | false {
 		let blockHeader = new BlockHeader(dataFormat.header);
-
 		let blockData = new BlockData(blockHeader);
-
 		for (let i = 0; i < dataFormat.txs.length; i++) {
 			let tx = BlockTx.serializeToClass(dataFormat.txs[i]);
 			if (!tx) {

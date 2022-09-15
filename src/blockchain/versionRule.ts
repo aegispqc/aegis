@@ -4,7 +4,7 @@ type Version = {
 	pqcertVer: number;
 }
 
-const versionNum: number[]= [
+const versionNum: number[] = [
 	0
 ]
 

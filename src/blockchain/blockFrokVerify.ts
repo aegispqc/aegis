@@ -1,5 +1,5 @@
 import BlockData from "./blockData";
-import BlockHeader  from "./blockHeader";
+import BlockHeader from "./blockHeader";
 import { calculateNbit, nbitSampleRate, referenceSeconds } from "./pow";
 import { TaskQueue } from "./taskQueue";
 import { getVersionByHeight } from "./versionRule";
@@ -95,7 +95,7 @@ class ForkTxDb {
 class BlockForkVerify {
 	private taskQueue: TaskQueue;
 	private core: Core;
-	
+
 	private blockHash: { [key: string]: Block };
 	private firstPreHash: Buffer;
 	private startHeight: number;

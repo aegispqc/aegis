@@ -73,4 +73,13 @@ function toFileJson(data) {
 	}, ' ');
 }
 
-export { rlQuestion, rlClose, toFileJson }
+function printMsg(text, errorFlag: boolean=false, data?: any) {
+	if(!errorFlag) {
+		console.log(text);
+	}
+	else {
+		console.error(text);
+	}
+}
+
+export { rlQuestion, rlClose, toFileJson, printMsg }

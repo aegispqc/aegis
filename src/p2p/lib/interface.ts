@@ -53,8 +53,8 @@ export interface interfaceNetworkVersion {
 	timestamp:		BigInt;
 	addrRecv:		interfaceNetworkNet;
 	addrFrom:		interfaceNetworkNet;
-	nonce:			Buffer;
 	uid:			string;
+    subVersion:     string;
 	startHeight:	number;
 	relay:			boolean;
 }
