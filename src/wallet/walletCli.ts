@@ -863,7 +863,7 @@ class WalletCli {
 				for (let x in data.sub) {
 					cData.push({ address: x, confirmed: data.sub[x].confirmed, unconfirmed: data.sub[x].unconfirmed });
 				}
-				cData.push({ address: 'Tatol', confirmed: data.total.confirmed, unconfirmed: data.total.unconfirmed });
+				cData.push({ address: 'Total', confirmed: data.total.confirmed, unconfirmed: data.total.unconfirmed });
 				let tableStr = getTableStr(cData, undefined, { address: 'L', confirmed: 'R', unconfirmed: 'R' });
 				return { result: json, tableStr };
 			}
@@ -1647,7 +1647,6 @@ class WalletCli {
 				}
 			}
 			else {
-				console.log({ thisValue, extraValue: extraValue + totalExtraValue });
 				r0 = await this.walletCreateAdvancedTransation(srcAddress, thisValue, extraValue + totalExtraValue, feeRatio, false, true, false);
 				totalExtraValue = 0n;
 			}
