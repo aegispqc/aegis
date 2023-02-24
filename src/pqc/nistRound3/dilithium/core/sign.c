@@ -4,7 +4,7 @@
 #include "packing.h"
 #include "polyvec.h"
 #include "poly.h"
-#include "randombytes_openssl.h"
+#include "../../../randombytes/randombytes.h",
 #include "symmetric.h"
 #include "fips202.h"
 
@@ -86,7 +86,7 @@ int crypto_sign_keypair_core(uint8_t *pk, uint8_t *sk, uint8_t *seed, uint8_t ge
 **************************************************/
 int crypto_sign_keypair(uint8_t *pk, uint8_t *sk, uint8_t *seed) {
   int r = randombytes(seed, SEEDBYTES);
-  if (r != 1) {
+  if (r != 0) {
 	  return -1;
   }
   return crypto_sign_keypair_core(pk, sk, seed, 1);
@@ -192,7 +192,7 @@ int crypto_sign_signature(uint8_t *sig,
   }
   else{
     int r = randombytes(rhoprime, CRHBYTES);
-	if (r != 1) {
+	if (r != 0) {
 	  return -1;
   	}
   }

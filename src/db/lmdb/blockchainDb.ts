@@ -22,16 +22,18 @@ type BlockDataFormat = {
  * @typedef {Object} getTxReturn
  * @property {Buffer} blockHash
  * @property {number} blockHeight
+ * @property {number} blockTime
  * @property {number} blockTxn
  * @property {BlockTx} blockTx
  * @property {(false | number)[]} voutspent
  */
 type getTxReturn = {
-	blockHash: Buffer,
-	blockHeight: number,
-	blockTxn: number,
-	blockTx: BlockTx,
-	voutspent: (false | number)[]
+	blockHash: Buffer;
+	blockHeight: number;
+	blockTime: number;
+	blockTxn: number;
+	blockTx: BlockTx;
+	voutspent: (false | number)[];
 }
 
 class BlockchainDb {
@@ -128,7 +130,7 @@ class BlockchainDb {
 	 * @param {number} height block height.
 	 * @returns {(BlockDataFormat|false)}  Returns a BlockDataFormat if the block exists, or false if it does not.
 	 */
-	getBlockDataByHeight(height: number) {
+	getBlockDataByHeight(height: number): false | BlockDataFormat {
 		let hash = this.getBlockHashByHeight(height);
 		if (!hash) {
 			return hash;
@@ -353,13 +355,13 @@ class BlockchainDb {
 		if (!block.txs[txIndex.txn]) {
 			return false;
 		}
-
+		let blockHeader = new BlockHeader(block.header);
 		let tx = BlockTx.serializeToClass(block.txs[txIndex.txn]);
 		if (!tx) {
 			return false;
 		}
 
-		return { blockHash: txIndex.blockHash, blockHeight: block.height, blockTxn: txIndex.txn, blockTx: tx, voutspent: txIndex.voutspent };
+		return { blockHash: txIndex.blockHash, blockHeight: block.height, blockTime: blockHeader.getTime(), blockTxn: txIndex.txn, blockTx: tx, voutspent: txIndex.voutspent };
 	}
 
 	/**
@@ -391,6 +393,24 @@ class BlockchainDb {
 	}
 
 	/**
+	 * Get pqcert detail by hash.
+	 * @param {Buffer} hash pqcert hash.
+	 * @returns {(false|{ blockHash: Buffer, blockTime: Number, blockTxn: number, txid: Buffer, pqcertn: number, pqcert: PQCertType})}
+	 */
+	getPqcertDetailsByHash(hash: Buffer): false | { blockHash: Buffer, blockHeight: number, blockTime: Number, blockTxn: number, txid: Buffer, pqcertn: number, pqcert: PQCertType } {
+		let pqcIndex = this.indexDb.getPqcertIndex(hash);
+		if (!pqcIndex) {
+			return false;
+		}
+
+		let tx = this.getTransactionByTxid(pqcIndex.txid);
+		if (!tx) {
+			return false;
+		}
+		return { blockHash: tx.blockHash, blockHeight: tx.blockHeight, blockTime: tx.blockTime, blockTxn: tx.blockTxn, txid: pqcIndex.txid , pqcertn: pqcIndex.pqcertn, pqcert: tx.blockTx.pqcert[pqcIndex.pqcertn]};
+	}
+
+	/**
 	 * Get block data by db data
 	 * @param {blockDbData} data 
 	 * @param {Buffer} hash 
@@ -412,6 +432,14 @@ class BlockchainDb {
 	 */
 	static getDbdata(data: BlockDataFormat): blockDbData {
 		return [data.height, data.header, data.txs];
+	}
+
+	/**
+	 * 
+	 */
+	async exit(){
+		await this.dbRoot.close();
+		console.log('Block db exit');
 	}
 }
 

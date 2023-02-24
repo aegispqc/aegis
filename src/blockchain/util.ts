@@ -1,4 +1,4 @@
-import { equationsOffset, verifyPoW } from "./pow";
+import { powParameter, verifyPoW } from "./pow";
 
 type BinaryToTextEncoding = 'base64' | 'hex';
 
@@ -203,7 +203,7 @@ function SIPrefix(n: number | bigint) {
 
 async function testMinerAsync(mqh, nbitI, miner) {
 	// console.log('testMinerAsync start!');
-	let xMax = (nbitI.readUInt8(0) + equationsOffset + 5);
+	let xMax = (nbitI.readUInt8(0) + powParameter.equationsOffset + 5);
 	let xbuf = Buffer.alloc(32);
 	let xbuf2 = Buffer.alloc(32);
 	xMax = 2 ** xMax;

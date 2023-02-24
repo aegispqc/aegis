@@ -144,6 +144,23 @@ const mineSchema = {
 	required: ['address']
 }
 
+const mineAdvanceSchema = {
+	type: 'object',
+	properties: {
+		address: {
+			anyOf: [
+				hash,
+				{ "type": 'boolean' }
+			]
+		},
+		gpuUse: {
+			type: 'array',
+			items: { "type": 'boolean' }
+		}
+	},
+	required: ['address']
+}
+
 const getCacheTxByHashSchema = {
 	type: 'object',
 	properties: {
@@ -268,6 +285,7 @@ const walletAddWatchAddressValidate = ajv.compile(walletAddWatchAddressSchema);
 const walletGetTxListValidate = ajv.compile(walletGetTxListSchema);
 const peerValidate = ajv.compile(peerSchema);
 const mineValidate = ajv.compile(mineSchema);
+const mineAdvanceValidate = ajv.compile(mineAdvanceSchema);
 const newBlockOnlyTxidsValidate = ajv.compile(newBlockOnlyTxidsSchema);
 
 export {
@@ -287,6 +305,7 @@ export {
 	walletGetTxListValidate,
 	peerValidate,
 	mineValidate,
+	mineAdvanceValidate,
 	newBlockOnlyTxidsValidate,
 }
 

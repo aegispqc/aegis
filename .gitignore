@@ -302,8 +302,6 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
-x64/
-x86/
 [Ww][Ii][Nn]32/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
@@ -658,11 +656,34 @@ FodyWeavers.xsd
 .nfs*
 
 *.mdb
-*.db*
-build/
+
+# typescript
+dist/
+
 package-lock.json
 
+build/
+
+test/*/*.js
+walletHistory.json
+test/test_p2p/blockdb
+test/test_p2p/blockdb/*
+test/test_p2p/walletDb
+test/test_p2p/walletDb/*
+test/test_p2p/walletFile/wallet.json
+*.wallet
+
+package-lock.json
+test/**/walletFile/*
+test_block/walletFile/*
+test_tree/walletFile/*
+test_tree/walletFile*/*
+
+*.db*
 config.json
 wconfig.json
+bin.zip
+/mineBin/*
 
-!/src/miner/mineBin/mineWin32.*
+!/src/miner/mineBin/*
+index

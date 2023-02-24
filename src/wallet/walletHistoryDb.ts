@@ -808,6 +808,12 @@ class WalletHistoryDb {
 		await this.setUpdateHeight(0);
 		return true;
 	}
+
+	async exit(){
+		await this.taskQueue.terminate();
+		await this.dbRoot.close();
+		console.log('Wallet history db exit');
+	}
 }
 
 export { WalletHistoryDb }

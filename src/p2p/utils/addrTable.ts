@@ -460,6 +460,10 @@ class P2PAddress {
 
 		return Promise.all(returnData);
 	}
+
+	async exit() {
+		await this.#p2pStatusDb.exit();
+	}
 }
 
 export default P2PAddress;

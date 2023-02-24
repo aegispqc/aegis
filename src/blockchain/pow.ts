@@ -1,9 +1,11 @@
 import { MQPHash } from '../crypto/MQPHash';
 import { shake256XOF } from '../crypto/hash';
 
-const equationsOffset = 31;
-const nbitSampleRate = 200;
-const referenceSeconds = 600;
+const powParameter = {
+	equationsOffset: 31,
+	nbitSampleRate: 200,
+	referenceSeconds: 600
+}
 
 /**
  * @param {Buffer} seed - Block Header, Does not contain
@@ -11,7 +13,7 @@ const referenceSeconds = 600;
  * @param {Buffer} x - 32byte; Hash input 
  */
 function verifyPoW(seed: Buffer, nbit: Buffer, x: Buffer): boolean {
-	let equationsN = nbit.readUInt8(0) + equationsOffset;
+	let equationsN = nbit.readUInt8(0) + powParameter.equationsOffset;
 	let variablesN = equationsN + 5;
 	let threshold = nbit.readUInt8(1);
 
@@ -105,11 +107,16 @@ function getDifficultyByNbit(nbit: Buffer): number {
 	return exponent + Math.log2(512 / (512 - threshold));
 }
 
+function setPow(newEquationsOffset = 31, newNbitSampleRate = 200, newReferenceSeconds = 600) {
+	powParameter.equationsOffset = newEquationsOffset;
+	powParameter.nbitSampleRate = newNbitSampleRate;
+	powParameter.referenceSeconds = newReferenceSeconds;
+}
+
 export {
 	verifyPoW,
 	calculateNbit,
-	nbitSampleRate,
-	referenceSeconds,
+	powParameter,
 	getDifficultyByNbit,
-	equationsOffset
+	setPow
 }

@@ -425,7 +425,7 @@ class PQCert {
 type pqcertJson = PQCertRootJsonData | PQCertPubKeyJsonData | PQCertGroupJsonData;
 type PQCertType = (PQCertRoot | PQCertPubKey | PQCertGroup);
 
-function creatPQCert(PQCertClass: any, pqcertData: Buffer | pqcertJson, shareBuffer: boolean = false): any {
+function createPQCert(PQCertClass: any, pqcertData: Buffer | pqcertJson, shareBuffer: boolean = false): any {
 	let temp;
 	if (Buffer.isBuffer(pqcertData)) {
 		temp = pqcertData;
@@ -445,16 +445,16 @@ function creatPQCert(PQCertClass: any, pqcertData: Buffer | pqcertJson, shareBuf
 	return new PQCertClass(temp, shareBuffer);
 }
 
-function creatPQCertRoot(pqcertData: Buffer | PQCertRootJsonData, shareBuffer: boolean = false): PQCertRoot | false {
-	return creatPQCert(PQCertRoot, pqcertData, shareBuffer);
+function createPQCertRoot(pqcertData: Buffer | PQCertRootJsonData, shareBuffer: boolean = false): PQCertRoot | false {
+	return createPQCert(PQCertRoot, pqcertData, shareBuffer);
 }
 
-function creatPQCertPubKey(pqcertData: Buffer | PQCertPubKeyJsonData, shareBuffer: boolean = false): PQCertPubKey | false {
-	return creatPQCert(PQCertPubKey, pqcertData, shareBuffer);
+function createPQCertPubKey(pqcertData: Buffer | PQCertPubKeyJsonData, shareBuffer: boolean = false): PQCertPubKey | false {
+	return createPQCert(PQCertPubKey, pqcertData, shareBuffer);
 }
 
-function creatPQCertGroup(pqcertData: Buffer | PQCertGroupJsonData, shareBuffer: boolean = false): PQCertGroup | false {
-	return creatPQCert(PQCertGroup, pqcertData, shareBuffer);
+function createPQCertGroup(pqcertData: Buffer | PQCertGroupJsonData, shareBuffer: boolean = false): PQCertGroup | false {
+	return createPQCert(PQCertGroup, pqcertData, shareBuffer);
 }
 
-export { getType, PQCertRoot, PQCertPubKey, PQCertGroup, PQCert, creatPQCertRoot, creatPQCertPubKey, creatPQCertGroup, PQCertType };
+export { getType, PQCertRoot, PQCertPubKey, PQCertGroup, PQCert, createPQCertRoot, createPQCertPubKey, createPQCertGroup, PQCertType };

@@ -32,6 +32,7 @@ import { shake256 } from '../crypto/hash';
 import { PQCEncrypt } from '../crypto/PQCEncrypt';
 import { jsonParse, jsonStringify } from './json';
 import { Socket } from 'net';
+import { BlockDataFormat } from '../db/lmdb/blockchainDb';
 
 type auth = {
 	usr: string;
@@ -171,6 +172,11 @@ class RpcServer {
 			let { method, params } = dataJson;
 			let id = dataJson.id;
 			let rdata;
+			if (!Array.isArray(params)) {
+				res.writeHead(400, { 'Content-Type': 'text/json' });
+				res.end(JSON.stringify({ error: 'status 400' }));
+				return;
+			}
 			if (this.methodTable[method]) {
 				console.log(`RPC method: ${method}`);
 				rdata = await this.methodTable[method].call(this, ...params);
@@ -210,15 +216,18 @@ class RpcServer {
 
 	readonly methodTable: { [key: string]: (...parms: any) => Promise<rpcReturn> | rpcReturn } = {
 		getLastBlock: this.getLastBlock,
+		getLastBlockHeight: this.getLastBlockHeight,
 		getBlockDataByHash: this.getBlockDataByHash,
 		getBlockDataByHeight: this.getBlockDataByHeight,
 		getTransactionByTxid: this.getTransactionByTxid,
 		getPqcertByHash: this.getPqcertByHash,
+		getPqcertDetailsByHash: this.getPqcertDetailsByHash,
 		newBlock: this.newBlock,
 		createTransation: this.createTransation,
 		txValidator: this.txValidator,
 		addTx: this.addTx,
 		mine: this.mine,
+		mineAdvance: this.mineAdvance,
 		getMiningBlock: this.getMiningBlock,
 		newBlockOnlyTxids: this.newBlockOnlyTxids,
 		getDifficulty: this.getDifficulty,
@@ -241,7 +250,9 @@ class RpcServer {
 		p2pDeleteBlackPeer: this.p2pDeleteBlackList,
 		p2pStatus: this.p2pStatus,
 		p2pGetPeerList: this.p2pGetPeerList,
-		p2pGetBlackList: this.p2pGetBlackList
+		p2pGetBlackList: this.p2pGetBlackList,
+		//------- gpu --------
+		getGPUStatus: this.getGPUStatus
 	}
 
 	readonly pollTable: { [key: string]: (...parms: any) => Promise<rpcReturn> | rpcReturn } = {
@@ -262,12 +273,14 @@ class RpcServer {
 			return { error: getLastBlockValidate.errors[0].message };
 		}
 
-		let block = await this.task.getLastBlock();
+		let block: (BlockDataFormat & { txidList?: Buffer[] }) | false = await this.task.getLastBlock();
 		if (!block) {
 			return { error: `Last block was not found!` };
 		}
 
+		block.txidList = block.txs.map( x => shake256(x));
 		if (!txsFlag) {
+			
 			delete block.txs;
 		}
 
@@ -276,6 +289,14 @@ class RpcServer {
 		}
 
 		return { result: RpcServer.BlockDataToJson(block) };
+	}
+
+	/**
+	 * Get last block height.
+	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	 async getLastBlockHeight(): Promise<rpcReturn> {
+		return { result: this.task.core.nowHeight };
 	}
 
 	/**
@@ -292,12 +313,14 @@ class RpcServer {
 		}
 
 		let hashBuf = Buffer.from(hash, 'hex');
-		let block = await this.task.getBlockDataByHash(hashBuf);
+		let block: (BlockDataFormat & { txidList?: Buffer[] }) | false = await this.task.getBlockDataByHash(hashBuf);
 		if (!block) {
 			return { error: `block (${hash}) is not found!` };
 		}
 
+		block.txidList = block.txs.map( x => shake256(x));
 		if (!txsFlag) {
+			
 			delete block.txs;
 		}
 
@@ -321,12 +344,14 @@ class RpcServer {
 			return { error: getBlockDataByHeightValidate.errors[0].message };
 		}
 
-		let block = await this.task.getBlockDataByHeight(height);
+		let block: (BlockDataFormat & { txidList?: Buffer[] }) | false = await this.task.getBlockDataByHeight(height);
 		if (!block) {
 			return { error: `block height (${height}) is not found!` };
 		}
 
+		block.txidList = block.txs.map( x => shake256(x));
 		if (!txsFlag) {
+			
 			delete block.txs;
 		}
 
@@ -354,12 +379,15 @@ class RpcServer {
 			return { error: `Tx (${txid}) is not found!` };
 		}
 
+		let result: typeof tx & { tx?: any } = Object.assign({ txid }, tx);
+		delete result.blockTx;
 		if (raw) {
 			let txRaw = tx.blockTx.getSerialize();
 			if (!txRaw) {
 				return { error: `getTx (${txid}) is not fail!` };
 			}
-			return { result: { txid, blockHash: tx.blockHash, blockHeight: tx.blockHeight, blockTxn: tx.blockTxn, tx: txRaw, voutspent: tx.voutspent } };
+			result.tx = txRaw;
+			return { result };
 		}
 
 		let txJson = tx.blockTx.json;
@@ -367,7 +395,8 @@ class RpcServer {
 			return { error: `getTx (${txid}) is fail!` };
 		}
 
-		return { result: { txid, blockHash: tx.blockHash, blockHeight: tx.blockHeight, blockTxn: tx.blockTxn, tx: txJson, voutspent: tx.voutspent } };
+		result.tx = txJson;
+		return { result };
 	}
 
 	/**
@@ -398,6 +427,36 @@ class RpcServer {
 		}
 
 		return { result: pqcertJson };
+	}
+
+	/**
+	 * Get pqcert by hash.
+	 * @param {string} hash block Hash.
+	 * @param {boolean} raw Whether the transaction is expressed in raw.
+	 * @returns {rpcReturn} If complete return `{result: any}` else return `{error: any}`.
+	 */
+	async getPqcertDetailsByHash(hash: string, raw?: boolean): Promise<rpcReturn> {
+		if (!getPqcertByHashValidate({ hash, raw })) {
+			console.error(getPqcertByHashValidate.errors);
+			return { error: getPqcertByHashValidate.errors[0].message };
+		}
+
+		let hashBuf = Buffer.from(hash, 'hex');
+		let pqcerData: any = await this.task.getPqcertDetailsByHash(hashBuf);
+		if (!pqcerData) {
+			return { error: `pqcert (${hash}) is not found!` };
+		}
+
+		if (raw) {
+			return { result: { hash: hash, ...pqcerData } };
+		}
+
+		pqcerData.pqcert = pqcerData.pqcert.json;
+		if (!pqcerData.pqcert) {
+			return { error: `pqcert (${hash}) is fail!` };
+		}
+
+		return { result: pqcerData };
 	}
 
 	/**
@@ -613,6 +672,23 @@ class RpcServer {
 		}
 		this.task.mine(addrBuf, inCacheTxFlag, testFlag);
 
+		return { result: true };
+	}
+
+	async mineAdvance(address: string | false, gpuUse?: boolean[]): Promise<rpcReturn> {
+		if (!mineValidate({ address })) {
+			console.error(mineValidate.errors);
+			return { error: mineValidate.errors[0].message };
+		}
+		let addrBuf;
+		if (address === false) {
+			addrBuf = false;
+
+		}
+		else {
+			addrBuf = Buffer.from(address, 'hex');
+		}
+		this.task.mineAdvance(addrBuf, gpuUse);
 		return { result: true };
 	}
 
@@ -1028,6 +1104,11 @@ class RpcServer {
 		}
 		return data;
 	}
+
+	async getGPUStatus(): Promise<rpcReturn> {
+        let r = await this.task.getGPUStatus();
+        return { result: r };
+    }
 
 	exit() {
 		console.log('rpc server exit');

@@ -4,15 +4,15 @@ import { Task } from '../task';
 import { configValidate } from './configValidate';
 import path from 'path';
 import P2P from '../p2p/p2p';
-import { mainNet } from '../p2p/lib/networkList';
+import { mainNet, testNet } from '../p2p/lib/networkList';
 
 const defaultNodeConfig = {
 	coreOpt: {
-		dbDir: path.join(process.cwd(), 'data', 'blockDb'),
+		dbDir: path.join('./', 'data', 'blockDb'),
 		minerFeeRatio: 1n,
 	},
 	walletHistoryOpt: {
-		dbDir: path.join(process.cwd(), 'data', 'walletHistoryDb'),
+		dbDir: path.join('./', 'data', 'walletHistoryDb'),
 	},
 	rpcOpt: {
 		hostname: '127.0.0.1',
@@ -24,7 +24,7 @@ const defaultNodeConfig = {
 		disable: false
 	},
 	p2pOpt: {
-		peerDir: path.join(process.cwd(), 'data', 'peers'),
+		peerDir: path.join('./', 'data', 'peers'),
 		maxConnect: 256,
 		listenPort: 51977,
 		serverDisable: false
@@ -40,7 +40,7 @@ const defaultNodeConfig = {
 	}
 }
 
-async function init(config, notify?: { blockNotify?: string, blockForkNotify?: string, txNotify?: string }) {
+async function init(config, notify?: { blockNotify?: string, blockForkNotify?: string, txNotify?: string }, testMode?: boolean) {
 	const originalLog = console.log;
 	console.log = (...input) => {
 		originalLog(`[${(new Date().toISOString())}]`, ...input);
@@ -60,14 +60,19 @@ async function init(config, notify?: { blockNotify?: string, blockForkNotify?: s
 		config.coreOpt.minerFeeRatio = BigInt(config.coreOpt.minerFeeRatio);
 	}
 
-	let task = new Task(config.taskOpt, config.coreOpt, config.walletHistoryOpt, notify);
+	let task = new Task(config.taskOpt, config.coreOpt, config.walletHistoryOpt, notify, testMode);
 	await task.init();
 
 	let p2p;
 	if (config.p2pOpt) {
-		p2p = new P2P(mainNet, task, config.p2pOpt, config.services);
+		if (testMode) {
+			p2p = new P2P(testNet, task, config.p2pOpt, config.services);
+		}
+		else {
+			p2p = new P2P(mainNet, task, config.p2pOpt, config.services);
+		}
 		let r = await p2p.initialize();
-		if(r && config.p2pOpt.serverDisable !== true){
+		if (r && config.p2pOpt.serverDisable !== true) {
 			p2p.serverOn(config.p2pOpt.listenPort);
 		}
 	}

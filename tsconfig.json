@@ -8,11 +8,14 @@
 		"outDir": "./dist/",
 		"inlineSourceMap": false,
 		"inlineSources": true,
-		"declaration": false,
+		"declaration": true,
 		"noEmit": false
 	},
 	"files":[
-		"./index.ts"
+		"index.ts"
+	],
+	"include": [
+		"src/**/*.ts"
 	],
 	"exclude": [
 		"node_modules" 

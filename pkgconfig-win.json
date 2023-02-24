@@ -1,11 +1,11 @@
 {
-	"name": "app",
-	"version": "0.1.0",
+	"name": "aegis",
+	"version": "0.1.1",
 	"description": "",
 	"bin": "dist/index.js",
 	"pkg": {
 		"script": "dist/index.js",
-		"assets": ["./node_modules/@lmdb/lmdb-win32-x64", "./dist/src/miner/mineBin/mineWin32.exe"],
+		"assets": ["./node_modules/@lmdb/lmdb-win32-x64", "./dist/src/miner/mineBin/mineWin.exe"],
 		"targets": ["node16-win-x64"],
 		"outputPath": "bin/pkg/"
 	},

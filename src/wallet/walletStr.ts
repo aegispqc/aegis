@@ -174,7 +174,7 @@ Result:
 }`
 	},
 	walletSend: {
-		simple: `walletSend [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ signSelect?: number[] ] [ opReturnStr?: string ] [ feeRatio: number=1] [ checkFlag: boolean ] #The easy method. One-time transaction generation.`,
+		simple: `walletSend [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ signSelect: number[], [ opReturnStr: string, [ feeRatio: number = 1, [ useAllUTXO: boolean, [ changeAddress: string, [ checkFlag: boolean ]]]]]] #The easy method. One-time transaction generation.`,
 		detail: `walletSend
 The easy method. One-time transaction generation.
 
@@ -197,7 +197,13 @@ Message
 6. feeRatio (type number, optional, default = 1)
 Fee ratio. Do not less than 1. 
 
-7. checkFlag (type boolean, optional, default = true)
+7. useAllUTXO (type boolean, optional)
+Whether to use all the UTXO.
+
+8.changeAddress (type string, optional)
+Address for change.
+
+9. checkFlag (type boolean, optional, default = true)
 check Flag. Whether to make the final confirmation.
 `
 	},
@@ -215,7 +221,7 @@ Target address and amount.
 Format:
 { address: string, value: string }[]
 Example:
-[{"address":"address1","value":"100"},{"address":"address2","value":"100"}]
+[{ "address" : "address1", "value" : "100" }, { "address": "address2", "value" : "100" }]
 
 3. signSelect (type number[], optional)
 This transaction is signed using the selected signature. And the length of the signature is related to the renewal fee.
@@ -245,21 +251,21 @@ Arguments:
 1. srcAddress (type string[], required)
 Send address.
 Example:
-["address1","address2","address3",...]
+[ "address1", "address2", "address3", ... ]
 
 2. target (type object[], required)
 Target address and amount.
 Format:
 { address: string, value: string }[]
 Example:
-[{"address":"address1","value":"100"},{"address":"address2","value":"100"}]
+[{ "address" : "address1", "value" : "100" }, { "address" : "address2", "value" : "100" }]
 
 3. feeRatio (type number, optional, default = 1)
 Fee ratio. Do not less than 1. 
 `
 	},
 	walletCreateTransation: {
-		simple: `walletCreateTransation [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ extraValue: number = 10000 ] [ rawFlag: boolean = true ] [ tempFlag: boolean = true ]`,
+		simple: `walletCreateTransation [ srcAddress: string ] [ tgtAddress: string ] [ value: number ] [ extraValue: number = 10000, [ rawFlag: boolean = true, [ tempFlag: boolean = true ]]]`,
 		detail: `walletCreateTransation
 Add a new transaction.
 		
@@ -310,7 +316,7 @@ Transaction raw.
 `
 	},
 	signTx: {
-		simple: `signTx [ address: string ] [ signSelect: number[] ] [ feeRatio: number = 1 ] [ rawFlag: boolean = true ] [ tempFlag: boolean = true ] [ autoAddPqcert: boolean = true ] [ txRaw?: string ]`,
+		simple: `signTx [ address: string ] [ signSelect: number[] ] [ feeRatio: number = 1, [ rawFlag: boolean = true, [ tempFlag: boolean = true, [ autoAddPqcert: boolean = true, [ txRaw?: string ]]]]]`,
 		detail: `signTx
 sign transaction.
 
@@ -422,7 +428,7 @@ Whether the transaction is expressed in raw.
 `
 	},
 	getBlockDataByHash: {
-		simple: `getBlockDataByHash [ hash: string ] [ txsFlag: boolean = false ] [ rawFlag: boolean = false ]`,
+		simple: `getBlockDataByHash [ hash: string ] [ txsFlag: boolean = false, [ rawFlag: boolean = false ]]`,
 		detail: `getBlockDataByHash 
 
 Arguments:
@@ -437,7 +443,7 @@ Whether the transaction is expressed in raw.
 `
 	},
 	getBlockDataByHeight: {
-		simple: `getBlockDataByHeight [ height: number ] [ txsFlag: boolean = false ] [ rawFlag: boolean = false ]`,
+		simple: `getBlockDataByHeight [ height: number ] [ txsFlag: boolean = false, [ rawFlag: boolean = false ]]`,
 		detail: `getBlockDataByHeight
 Get the block data by Height.
 
@@ -508,7 +514,7 @@ Arguments:
 `
 	},
 	createTransation: {
-		simple: `createTransation [ data: object ] [ replaceLS: boolean = false ] [ rawFlag: boolean = false ]`,
+		simple: `createTransation [ data: object ] [ replaceLS: boolean = false, [ rawFlag: boolean = false ]]`,
 		detail: `createTransation
 		
 Arguments:
@@ -622,7 +628,7 @@ Monitor the address.
 Monitor all addresses of the wallet.`
 	},
 	walletGetTxList: {
-		simple: `walletGetTxList [ address: string ] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
+		simple: `walletGetTxList [ address: string ] [ limit: number = 20, [ skip: number = 0, [ reverse: boolean = true ]]]`,
 		detail: `walletGetTxList
 Get transactions for single or multiple addresses.
 
@@ -630,11 +636,11 @@ Arguments:
 1. address (type string, required) 
 2. limit (type number, default = 20)
 3. skip (type number, default = 0)
-4. reverse (type boolean, default: true)
+4. reverse (type boolean, default = true)
 `
 	},
 	walletGetUTXOList: {
-		simple: `walletGetUTXOList [ address: string] [ limit: number ] [ skip: number ] [ reverse: boolean ]`,
+		simple: `walletGetUTXOList [ address: string] [ limit: number = 20, [ skip: number = 0 [ reverse: boolean = true ]]]`,
 		detail: `walletGetUTXOList
 Get unused transactions for single or multiple addresses.
 
@@ -642,7 +648,7 @@ Arguments:
 1. address (type string, required) 
 2. limit (type number, default = 20)
 3. skip (type number, default = 0)
-4. reverse (type boolean, default: true)
+4. reverse (type boolean, default = true)
 `
 	},
 	blockTxJson2Raw: {

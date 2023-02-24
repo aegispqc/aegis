@@ -362,6 +362,11 @@ class P2pStatusDb {
 
 		return await this.peerDb.put(ipPortBuf, data);
 	}
+
+	async exit() {
+		await this.dbRoot.close();
+		console.log('P2P db exit');
+	}
 }
 
 export { P2pStatusDb, ipStrToBuf, ipBufToStr, ipPortStrToBuf, ipPortBufToObj };

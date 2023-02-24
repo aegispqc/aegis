@@ -27,14 +27,12 @@
         'core/ntt.c',
         'core/reduce.c',
         'core/rounding.c',
-        'core/randombytes.c',
+        '../../randombytes/randombytes.c',
         'core/fips202.c',
         'core/symmetric-shake.c',
       ],
-      'include_dirs': [
-        "<!(node -p \"require('node-addon-api').include_dir\")",
-      ],
       'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS', 'DILITHIUM_MODE=2' ],
+      "include_dirs": [ "<!(node -p \"require('node-addon-api').include_dir\")" ]
     },
     {
       'target_name': 'Dilithium3RefNistRound3',
@@ -63,14 +61,12 @@
         'core/ntt.c',
         'core/reduce.c',
         'core/rounding.c',
-        'core/randombytes.c',
+        '../../randombytes/randombytes.c',
         'core/fips202.c',
         'core/symmetric-shake.c',
       ],
-      'include_dirs': [
-        "<!(node -p \"require('node-addon-api').include_dir\")",
-      ],
       'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS', 'DILITHIUM_MODE=3' ],
+      "include_dirs": [ "<!(node -p \"require('node-addon-api').include_dir\")" ]
     },
     {
       'target_name': 'Dilithium5RefNistRound3',
@@ -100,14 +96,12 @@
         'core/ntt.c',
         'core/reduce.c',
         'core/rounding.c',
-        'core/randombytes.c',
+        '../../randombytes/randombytes.c',
         'core/fips202.c',
         'core/symmetric-shake.c',
       ],
-      'include_dirs': [
-        "<!(node -p \"require('node-addon-api').include_dir\")",
-      ],
       'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS', 'DILITHIUM_MODE=5' ],
-    }
+      "include_dirs": [ "<!(node -p \"require('node-addon-api').include_dir\")" ]
+    },
   ],
 }

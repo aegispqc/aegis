@@ -3,7 +3,7 @@ import * as lmdb from 'lmdb';
 import { TaskQueue } from '../blockchain/taskQueue';
 import { PQCertPubKeyJsonData, PQCertRootJsonData } from '../blockchain/dataSchema/pqcertSchema';
 import { randomBytes } from 'crypto';
-import { creatPQCertPubKey, creatPQCertRoot, PQCertRoot } from '../blockchain/pqcert';
+import { createPQCertPubKey, createPQCertRoot, PQCertRoot } from '../blockchain/pqcert';
 import { getSignSys } from '../blockchain/signType';
 import { getSeedTree } from './genWallet';
 
@@ -109,7 +109,7 @@ class WalletDb {
 					pubKey: data.keypairs[i].publicKey.toString('hex')
 				};
 
-				let pqcertPubKey = creatPQCertPubKey(pqcertPubKeyJson);
+				let pqcertPubKey = createPQCertPubKey(pqcertPubKeyJson);
 				if (!pqcertPubKey) {
 					return false;
 				}
@@ -176,7 +176,7 @@ class WalletDb {
 				return false;
 			}
 
-			let pqcertRoot = creatPQCertRoot(pqcertRootJson);
+			let pqcertRoot = createPQCertRoot(pqcertRootJson);
 			if (!pqcertRoot) {
 				return false;
 			}
@@ -270,7 +270,7 @@ class WalletDb {
 			let ak = new AddressKeyBuffer(key);
 
 			if (hash.equals(ak.hash)) {
-				value.pqcertRoot = creatPQCertRoot(value.pqcertRoot);
+				value.pqcertRoot = createPQCertRoot(value.pqcertRoot);
 				return value;
 			}
 		}
@@ -284,7 +284,7 @@ class WalletDb {
 
 		for (let { key, value } of this.addressDb.getRange({ start: start.buf, end: end.buf, snapshot: false })) {
 			let bufK = new AddressKeyBuffer(key);
-			value.pqcertRoot = creatPQCertRoot(value.pqcertRoot);
+			value.pqcertRoot = createPQCertRoot(value.pqcertRoot);
 			addresses.push({ hash: bufK.hash, ...value });
 		}
 
@@ -331,7 +331,8 @@ class WalletDb {
 
 	async exit() {
 		await this.taskQueue.terminate();
-		console.log('WalletDb Task exit');
+		await this.dbRoot.close();
+		console.log('Wallet db task exit');
 	}
 }
 

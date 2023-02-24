@@ -2,7 +2,7 @@ import BlockHeader from './blockchain/blockHeader';
 import { BlockTx, OpReturn } from './blockchain/blockTx';
 import BlockData from './blockchain/blockData';
 import { BlockchainDb, BlockDataFormat, lastVoutSpentData, pqcertIndexData, txIndexData } from './db/lmdb/blockchainDb';
-import { calculateNbit, getDifficultyByNbit, nbitSampleRate, referenceSeconds } from './blockchain/pow';
+import { calculateNbit, getDifficultyByNbit, powParameter, setPow } from './blockchain/pow';
 import { TxValidator } from './blockchain/transactionValidator';
 import { PQCertType } from './blockchain/pqcert';
 import ScriptContainer from './blockchain/script';
@@ -15,6 +15,7 @@ import path from 'path';
 class Core {
 	private nowHeigth: number;
 	private stopAddTxFlag: boolean = false;
+	private testMode: boolean;
 
 	public minerFeeRatio: bigint;
 	public blockchainDb: BlockchainDb;
@@ -28,13 +29,17 @@ class Core {
 	 * @param {string} dbDir Blockchain Database Path.
 	 * @param {bigint} minerFeeRatio Fee ratio for miners.
 	 */
-	constructor(dbDir: string = path.join(process.cwd(), './blockDb'), minerFeeRatio: bigint = 1n) {
+	constructor(dbDir: string = path.join(process.cwd(), './blockDb'), minerFeeRatio: bigint = 1n, testMode?: boolean) {
 		this.blockchainDb = new BlockchainDb(dbDir);
 		this.minerFeeRatio = minerFeeRatio;
 		this.nowHeigth;
 		this.stopAddTxFlag = false;
-
+		this.testMode = (testMode) ? true : false ;
 		this.miningBlock = null;
+
+		if (testMode) {
+			setPow(19, 60, 120);
+		}
 	}
 
 	/**
@@ -150,8 +155,8 @@ class Core {
 		let thisHeight = lastBlock.height + 1;
 		let thisnBit;
 
-		if (lastBlock.height !== 0 && lastBlock.height % nbitSampleRate === 0) {
-			let sampleStart = this.blockchainDb.getBlockDataByHeight(lastBlock.height - nbitSampleRate);
+		if (lastBlock.height !== 0 && lastBlock.height % powParameter.nbitSampleRate === 0) {
+			let sampleStart = this.blockchainDb.getBlockDataByHeight(lastBlock.height - powParameter.nbitSampleRate);
 			if (!sampleStart) {
 				this.miningBlock = null;
 				return false;
@@ -161,7 +166,7 @@ class Core {
 			let startTime = sampleStartBlockHeader.getTime();
 			let endTime = lastBlockHeader.getTime();
 
-			thisnBit = calculateNbit(referenceSeconds, lastBlockHeader.rawNBit, nbitSampleRate, startTime, endTime);
+			thisnBit = calculateNbit(powParameter.referenceSeconds, lastBlockHeader.rawNBit, powParameter.nbitSampleRate, startTime, endTime);
 		}
 		else {
 			thisnBit = lastBlockHeader.rawNBit;
@@ -240,8 +245,8 @@ class Core {
 		let height = preBlock.height + 1;
 		let thisNbit;
 
-		if (preBlock.height !== 0 && preBlock.height % nbitSampleRate === 0) {
-			let sampleStart = this.blockchainDb.getBlockDataByHeight(preBlock.height - nbitSampleRate);
+		if (preBlock.height !== 0 && preBlock.height % powParameter.nbitSampleRate === 0) {
+			let sampleStart = this.blockchainDb.getBlockDataByHeight(preBlock.height - powParameter.nbitSampleRate);
 			if (!sampleStart) {
 				return false;
 			}
@@ -250,7 +255,7 @@ class Core {
 			let startTime = sampleStartBlockHeader.getTime();
 			let endTime = preBlockHeader.getTime();
 
-			thisNbit = calculateNbit(referenceSeconds, preBlockHeader.rawNBit, nbitSampleRate, startTime, endTime);
+			thisNbit = calculateNbit(powParameter.referenceSeconds, preBlockHeader.rawNBit, powParameter.nbitSampleRate, startTime, endTime);
 		}
 		else {
 			thisNbit = preBlockHeader.rawNBit;
@@ -387,6 +392,10 @@ class Core {
 
 	getPqcertByHash(hash: Buffer) {
 		return this.blockchainDb.getPqcertByHash(hash);
+	}
+
+	getPqcertDetailsByHash(hash: Buffer) {
+		return this.blockchainDb.getPqcertDetailsByHash(hash);
 	}
 
 	getTxIndex(hash: Buffer) {
@@ -541,8 +550,8 @@ class Core {
 
 		let lastBlockHeader = new BlockHeader(lastBlock.header, true);
 
-		if (lastBlock.height !== 0 && lastBlock.height % nbitSampleRate === 0) {
-			let sampleStart = this.blockchainDb.getBlockDataByHeight(lastBlock.height - nbitSampleRate);
+		if (lastBlock.height !== 0 && lastBlock.height % powParameter.nbitSampleRate === 0) {
+			let sampleStart = this.blockchainDb.getBlockDataByHeight(lastBlock.height - powParameter.nbitSampleRate);
 			if (!sampleStart) {
 				return false;
 			}
@@ -551,7 +560,7 @@ class Core {
 			let startTime = sampleStartBlockHeader.getTime();
 			let endTime = lastBlockHeader.getTime();
 
-			thisNbit = calculateNbit(referenceSeconds, lastBlockHeader.rawNBit, nbitSampleRate, startTime, endTime);
+			thisNbit = calculateNbit(powParameter.referenceSeconds, lastBlockHeader.rawNBit, powParameter.nbitSampleRate, startTime, endTime);
 		}
 		else {
 			thisNbit = lastBlockHeader.rawNBit;
@@ -584,6 +593,10 @@ class Core {
 		}
 
 		return r;
+	}
+
+	async exit(){
+		await this.blockchainDb.exit();
 	}
 }
 

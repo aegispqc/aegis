@@ -1,6 +1,6 @@
 import BlockData from "./blockData";
 import BlockHeader from "./blockHeader";
-import { calculateNbit, nbitSampleRate, referenceSeconds } from "./pow";
+import { calculateNbit, powParameter } from "./pow";
 import { TaskQueue } from "./taskQueue";
 import { getVersionByHeight } from "./versionRule";
 import { Core } from '../core';
@@ -143,8 +143,8 @@ class BlockForkVerify {
 			let lastHeight = thisHeigth - 1;
 
 			let thisNbit;
-			if (lastHeight !== 0 && lastHeight % nbitSampleRate === 0) {
-				let sampleStartHeigth = lastHeight - nbitSampleRate;
+			if (lastHeight !== 0 && lastHeight % powParameter.nbitSampleRate === 0) {
+				let sampleStartHeigth = lastHeight - powParameter.nbitSampleRate;
 				let sampleStartBlockHeader;
 
 				if (sampleStartHeigth < this.startHeight) {
@@ -162,7 +162,7 @@ class BlockForkVerify {
 				let startTime = sampleStartBlockHeader.getTime();
 				let endTime = preBlockHeader.getTime();
 
-				thisNbit = calculateNbit(referenceSeconds, preBlockHeader.rawNBit, nbitSampleRate, startTime, endTime);
+				thisNbit = calculateNbit(powParameter.referenceSeconds, preBlockHeader.rawNBit, powParameter.nbitSampleRate, startTime, endTime);
 			}
 			else {
 				thisNbit = preBlockHeader.rawNBit;

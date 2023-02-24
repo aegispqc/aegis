@@ -2,11 +2,11 @@ import path from 'path';
 import fs from 'fs/promises';
 import { constants } from 'fs';
 import os from 'os';
-import { equationsOffset } from "../blockchain/pow";
-import { MQPHash } from "../crypto/MQPHash";
-import { Mine } from "./mine";
+import { powParameter } from '../blockchain/pow';
+import { MQPHash } from '../crypto/MQPHash';
+import { Mine } from './mine';
 import { shake256 } from '../crypto/hash';
-
+import { spawn } from 'child_process';
 
 const maxN = 63; //If bigger then fix it.
 
@@ -34,12 +34,13 @@ class minerController {
 	public get minerRunFlag(): boolean { return this._minerRunFlag; }
 	public get interruptFlag(): boolean { return this._interruptFlag; }
 
-
 	constructor() {
+		this.miners = [];
 		this._fixNumber = 0;
 		this.fixIndex = -1;
 		this.fixStr = [];
 		this.cudaRunning = [];
+		this.enables = [];
 		this._minerRunFlag = false;
 		this._interruptFlag = true;
 		this.minerBinPath = undefined;
@@ -52,22 +53,22 @@ class minerController {
 		const minerBinDir = path.join(process.cwd(), '/mineBin/');
 		switch (os.platform()) {
 			case 'linux':
-				this.minerBinPath = path.join(minerBinDir, '/mine');
-				this.minerBinHash = Buffer.from("123aa6ab9fbba1477af5e73f70ec8c082719139e592b9d5451d0de143559ee0d", "hex");
-				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mine');
+				this.minerBinPath = path.join(minerBinDir, '/mineLinux');
+				this.minerBinHash = Buffer.from('9ab38de89bc2596295449738a133b499a5d2e227d6faf8b324fa907dc8cb04a3', 'hex');
+				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mineLinux');
 				break;
 			case 'win32':
-				this.minerBinPath = path.join(minerBinDir, '/mineWin32.exe');
-				this.minerBinHash = Buffer.from("5bf7ff13bb8420272991d5acd626eae239139c87809db3e1452865d2945e0ced", "hex");
-				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mineWin32.exe');
+				this.minerBinPath = path.join(minerBinDir, '/mineWin.exe');
+				this.minerBinHash = Buffer.from('501c6191ce49272a86a78c17e8c19ba15dc44101f906f80737933bb54895fcdb', 'hex');
+				minerBinPathSnapshot = path.join(__dirname, '/mineBin/mineWin.exe');
 				break;
 			default:
-				console.error("unkow os!")
+				console.error('unkown os!');
 				this.minerBinPath = undefined;
 				this.minerBinHash = undefined;
 				return;
 		}
-		
+
 		try {
 			await fs.mkdir(minerBinDir);
 		} catch (err) {
@@ -80,7 +81,7 @@ class minerController {
 			await fs.access(this.minerBinPath, constants.X_OK);
 		} catch {
 			let minerBin = await fs.readFile(minerBinPathSnapshot);
-			await fs.writeFile(this.minerBinPath, minerBin, {mode: 0o777});
+			await fs.writeFile(this.minerBinPath, minerBin, { mode: 0o777 });
 		}
 		try {
 			let minerBin = await fs.readFile(this.minerBinPath);
@@ -90,42 +91,53 @@ class minerController {
 		} catch (error) {
 			console.log(error);
 		}
-	}
-
-	async setup(mqphash: MQPHash, nbit: Buffer, enables?: boolean[], whichXWidth?: number) {
-		this._numOfEquations = nbit.readUInt8(0) + equationsOffset;
-		this._numOfVariables = this._numOfEquations + 5;
-
-		this.miners = [];
-		this.enables = [];
-		this.fixStr = [];
-		this.fixIndex = -1;
-
-		let crossbredOpt = {
-			id: 0,
-			d: 4,
-			k: 10,
-			t: 12,
-			b: 0,
-			print: false
-		}
 
 		let m = new Mine(this);
 		let numOfDev = await m.getDeviceCount();
-		this.size = numOfDev;
+		if (!numOfDev.err) {
+			this.size = numOfDev.data;
+		}
+		else {
+			this.size = 0;
+		}
+	}
+
+	allGpuEnable() {
+		this.enables = Array(this.size).fill(true);
+	}
+
+	setGpuEnable(gpuUse: boolean[] = []) {
+		this.enables = gpuUse;
+	}
+
+	async setup(mqphash: MQPHash, nbit: Buffer, whichXWidth?: number) {
+		this._numOfEquations = nbit.readUInt8(0) + powParameter.equationsOffset;
+		this._numOfVariables = this._numOfEquations + 5;
+
+		this.miners = [];
+		this.fixStr = [];
+		this.fixIndex = -1;
+
 		if (this.size < 1) {
 			this._minerRunFlag = false;
 			return;
 		}
 
+		let enableCount = 0;
 		for (let i = 0; i < this.size; i++) {
 			this.miners.push(new Mine(this));
-			if (!enables) {
-				this.enables.push(true);
+
+			if (!this.enables[i]) {
+				this.enables[i] = false;
 			}
 			else {
-				this.enables.push(enables[i] !== undefined ? enables[i] : false);
+				enableCount++;
 			}
+		}
+
+		if (enableCount < 1) {
+			this._minerRunFlag = false;
+			return;
 		}
 
 		for (let devID = 0; devID < this.size; devID++) {
@@ -171,7 +183,6 @@ class minerController {
 			}
 		}
 
-
 		this.cudaRunning = [];
 		for (let devID = 0; devID < this.size; devID++) {
 			this.cudaRunning.push(false);
@@ -185,7 +196,7 @@ class minerController {
 	async getX(): Promise<any> {
 		this._interruptFlag = false;
 		this.cudaRunning.fill(false);
-		return new Promise((r) => {
+		return new Promise(async (r) => {
 			let unStart = true;
 			for (let devID = 0; devID < this.size; devID++) {
 				if (this.enables[devID]) {
@@ -248,9 +259,79 @@ class minerController {
 	setMachineStoping(myid: number) {
 		this.cudaRunning[myid] = false;
 	}
+	static async getDeviceList(): Promise<{ error: any } | any[]> {
+		return new Promise(async (r) => {
+			let child = spawn('nvidia-smi', ['-L']);
+			let str = '';
+			let devices = [];
+			child.on('exit', (code) => {
+				let d = str.split(/\r\n|\n|\r/);
+				for (let i = 0; i < d.length - 1; i++) {
+					let tmp = d[i].split(' (UUID: ');
+					let deviceName = tmp[0].split(': ')[1];
+					let deviceUUID = tmp[1].slice(0, -1);
+					console.log(d[i]);
+					devices.push({ name: deviceName, uuid: deviceUUID });
+				}
+				r(devices);
+			});
+			child.stderr.on('data', (data) => {
+				console.error(`stderr: ${data}`);
+			});
+			child.stdout.on('data', (data) => {
+				str += data.toString();
+			});
+			child.on('error', (err) => {
+				r({ error: err });
+			});
+		});
+	}
 
+	static async getGPUStatusByUuid(uuid: string) {
+		return new Promise(async (r) => {
+			let child = spawn('nvidia-smi', ['-i', uuid, '--query-gpu=utilization.gpu,utilization.memory,temperature.gpu,fan.speed,driver_version,memory.total,memory.used,memory.free', '--format=csv,noheader,nounits']);
+			let str = '';
+			let devices = [];
+			child.on('exit', (code) => {
 
+				r(str);
+			});
+			child.stderr.on('data', (data) => {
+				console.error(`stderr: ${data}`);
+			});
+			child.stdout.on('data', (data) => {
+				str += data.toString();
+			});
+			child.on('error', (err) => {
+				r({ error: err });
+			});
+		});
+	}
+
+	static async getGPUStatus() {
+		let list = await minerController.getDeviceList();
+		if (!Array.isArray(list) && list.error) {
+			return false;
+		}
+		let devices = [];
+		if (Array.isArray(list)) for (let i = 0; i < list.length; i++) {
+			let t = await minerController.getGPUStatusByUuid(list[i].uuid);
+			t = t.toString().split(/, |\n|\r/);
+			devices.push({
+				'name': list[i].name,
+				'uuid': list[i].uuid,
+				'utilization.gpu': t[0],
+				'utilization.memory': t[1],
+				'temperature.gpu': t[2],
+				'fan.speed': t[3],
+				'driver_version': t[4],
+				'memory.total': t[5],
+				'memory.used': t[6],
+				'memory.free': t[7]
+			});
+		}
+		return devices;
+	}
 }
-
 
 export { minerController };

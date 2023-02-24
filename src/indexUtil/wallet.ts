@@ -13,7 +13,7 @@ const defaultWalletConfig = {
 		}
 	},
 
-	walletDataPath: path.join(process.cwd(), './walletFile'),
+	walletDataPath: path.join('./', 'walletFile'),
 	jsonSpace: true,
 	jsonColor: true,
 	addressBs58ck: true,

@@ -38,10 +38,11 @@ program
 	.option('-bn, --block-notify [type]')
 	.option('-bfn, --block-fork-notify [type]')
 	.option('-tn, --tx-notify [type]')
+	.option('-tm, --test-mode')
 	.action(async (script, options) => {
 		let opt = await getConfig(defultConfigPath);
-		let { blockNotify, blockForkNotify, txNotify } = options._optionValues;
-		initNode(opt, { blockNotify, blockForkNotify, txNotify });
+		let { blockNotify, blockForkNotify, txNotify, testMode } = options._optionValues;
+		initNode(opt, { blockNotify, blockForkNotify, txNotify}, testMode);
 	});
 
 program

@@ -386,7 +386,8 @@ export default class P2P {
 			if (!data || typeof data !== 'object'
 				|| !Buffer.isBuffer(data.knownLastHash)
 				|| typeof data.knownLastHeight !== 'number'
-				|| !Array.isArray(data.blockHash)) {
+				|| !Array.isArray(data.blockHash)
+				|| data.blockHash.length === 0) {
 				return;
 			}
 			this.#syncBlockQueue.push({
@@ -496,7 +497,7 @@ export default class P2P {
 					});
 				}
 			});
-		}, Math.min(syncAmount * 100, 1000));
+		}, Math.min(syncAmount * 100, 2000));
 	}
 
 	#unlockPeerSyncBlock(lastGetblocksData?: Buffer[], isFork?: boolean) {
@@ -743,6 +744,7 @@ export default class P2P {
 				this.#connectCache[i].disconnect();
 			}
 		}
+		await this.#addrTable.exit();
 		if (this.#server) {
 			return new Promise(r => {
 				this.#server.close(r);

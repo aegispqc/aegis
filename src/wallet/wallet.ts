@@ -1,5 +1,5 @@
 import path from 'path';
-import { creatPQCertPubKey, PQCertPubKey, PQCertRoot, } from '../blockchain/pqcert';
+import { createPQCertPubKey, PQCertPubKey, PQCertRoot, } from '../blockchain/pqcert';
 import { getSignSys } from '../blockchain/signType';
 import { PQCertPubKeyJsonData } from "../blockchain/dataSchema/pqcertSchema";
 import { getPushDataSizeBuffer, getCompactSizeBufferByNumber } from '../blockchain/util';
@@ -160,7 +160,7 @@ class Wallet {
 					pubKey: w.keypairs[i].publicKey.toString('hex')
 				}
 
-				let pqcertPubKey = creatPQCertPubKey(pqcertPubKeyJson);
+				let pqcertPubKey = createPQCertPubKey(pqcertPubKeyJson);
 				if (!pqcertPubKey) {
 					return false;
 				}
@@ -786,7 +786,7 @@ class Wallet {
 				pubKey: keyData.keypairs[i].publicKey.toString('hex')
 			}
 
-			let pqcertPubKey = creatPQCertPubKey(pqcertPubKeyJson);
+			let pqcertPubKey = createPQCertPubKey(pqcertPubKeyJson);
 			if (!pqcertPubKey) {
 				return false;
 			}
@@ -807,7 +807,7 @@ class Wallet {
 		for (let i = 0; i < kpList.length; i++) {
 			let sameCount = 0;
 			for (let j = 0; j < kpList[i].keypairs.length; j++) {
-				if (keyData.keypairs[j].publicKey.equals(kpList[i].keypairs[j].publicKey)) {
+				if (keyData.keypairs[j] && keyData.keypairs[j].publicKey.equals(kpList[i].keypairs[j].publicKey)) {
 					sameCount++;
 				}
 			}
@@ -835,7 +835,7 @@ class Wallet {
 		}
 		else {
 			console.log(`The key already exists: wid ${duplicatedWid}`);
-			return false;
+			return { duplicated: duplicatedWid };
 		}
 
 		// ----- add address 

@@ -1,9 +1,8 @@
 import { MQPHash } from '../crypto/MQPHash';
-import { equationsOffset, verifyPoW } from '../blockchain/pow';
+import { powParameter, verifyPoW } from '../blockchain/pow';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { MinerFix } from './minerFix';
 import { minerController } from './minerController';
-import { constants } from 'fs';
 import fs from 'fs/promises';
 import { shake256 } from '../crypto/hash';
 
@@ -28,7 +27,7 @@ class Mine {
 	}
 
 	init(mqphash: MQPHash, nbit: Buffer, whichXWidth?: number) {
-		this.m = nbit.readUInt8(0) + equationsOffset;
+		this.m = nbit.readUInt8(0) + powParameter.equationsOffset;
 		this.n = this.m + 5;
 		this.startSMCount = 0;
 		this.whichXWidth = whichXWidth ? whichXWidth : 1000;
@@ -48,7 +47,7 @@ class Mine {
 				r({ err: 'no path!' });
 				return;
 			}
-			
+
 			let minerBin = await fs.readFile(this._minerController.minerBinPath);
 			let mbSha = shake256(minerBin);
 			if (!mbSha.equals(this._minerController.minerBinHash)) {
@@ -73,7 +72,7 @@ class Mine {
 			this.child = spawn(this._minerController.minerBinPath, opts);
 			this.child.stdin.write(equations.join('\n'));
 			this.child.stdin.write('\nend\n');
-			
+
 			this.child.stdout.on('data', (data) => {
 				str += data.toString();
 			});
@@ -98,8 +97,7 @@ class Mine {
 			this.child.on('close', (code, signal) => {
 				if (signal === 'SIGTERM') {
 					r({ err: 'child process terminated due to receipt of signal SIGTERM!' });
-				}else
-				{
+				} else {
 					r({ err: 'child process terminated!' });
 				}
 			});
@@ -133,9 +131,10 @@ class Mine {
 		this.setDiviceID(devID);
 		this.startSMCount = startSMCount;
 		let fix = this.minerController.getNextFixStr();
+
 		while (true) {
 			let x;
-			if (this.minerController.fixNumber > 0) {
+			if (this.minerController.fixNumber > 0) { //do fix
 				if (fix) {
 					x = await this.cal(fix);
 				} else {
@@ -145,35 +144,32 @@ class Mine {
 					this.minerController.setMachineStoping(devID);
 					return false;
 				}
-			}
-			else {
-				x = await this.cal();
-			}
 
-			if (x.errCode === -101) {
-				if (this.minerController.fixNumber > 0) {//fix next
-					console.log(fix, 'this fix str not found。');
+				if (x.errCode === -101 || x.err || !x.result) {
+					console.log(`Fix str '${fix}' not found.`);
+					this.startSMCount = 0;
 					fix = this.minerController.getNextFixStr();
 					continue;
 				}
-				else {
-					if (cb) cb(false);
-					return false;
-				}
-			}
 
-			if (x.err || !x.result) {
-				if (cb) cb(false);
-				return false;
-			}
-
-			if (this.minerController.fixNumber > 0) {
 				if (!this.mqphash.checkIsSolution(x.result.xBuf.subarray(0, this.mqphash.MQP.variablesByte))) {
+					console.log(`Fix str '${fix}' check solution failed.`);
+					this.startSMCount = 0;
+					fix = this.minerController.getNextFixStr();
 					continue;
 				}
 			}
-			else {
+			else { //no fix
+				x = await this.cal();
+
+				if (x.errCode === -101 || x.err || !x.result) {
+					console.log('Get solution failed!');
+					if (cb) cb(false);
+					return false;
+				}
+
 				if (!this.checkSolution()) {
+					console.log('Check solution failed!');
 					if (cb) cb(false);
 					return false;
 				}
@@ -201,7 +197,7 @@ class Mine {
 				r({ err: 'no path!' });
 				return;
 			}
-			
+
 			let minerBin = await fs.readFile(this._minerController.minerBinPath);
 			let mbSha = shake256(minerBin);
 			if (!mbSha.equals(this._minerController.minerBinHash)) {
@@ -221,12 +217,13 @@ class Mine {
 						r({ err: 'x not found.' });
 					} else {
 						this.x_data = JSON.parse(words[1]);
-						r(this.x_data);
+						r({ data: this.x_data });
 					}
 				}
 			});
 			child.stderr.on('data', (data) => {
 				console.error(`stderr: ${data}`);
+				r({ err: data });
 			});
 			child.stdout.on('data', (data) => {
 				str += data.toString();
@@ -241,7 +238,7 @@ class Mine {
 				r({ err: 'no path!' });
 				return;
 			}
-			
+
 			let minerBin = await fs.readFile(this._minerController.minerBinPath);
 			let mbSha = shake256(minerBin);
 			if (!mbSha.equals(this._minerController.minerBinHash)) {

@@ -8,7 +8,7 @@
 
 #include "api.h"
 #include "inner.h"
-#include "../../utils/randombytes.h"
+#include "../../../../randombytes/randombytes.h"
 
 /**
  * Generate secret key from seed.
@@ -166,7 +166,7 @@ int falcon_genkey_core(unsigned char *pk, unsigned char *sk, unsigned char *seed
 int falcon_genkey(unsigned char *pk, unsigned char *sk, unsigned char *seed)
 {
 	int r = randombytes(seed, SEEDLEN);
-	if (r != 1) {
+	if (r != 0) {
 		return -1;
 	}
 	return falcon_genkey_core(pk, sk, seed);
@@ -246,7 +246,7 @@ falcon_sign_core(unsigned char *sm, const unsigned char *m,
 	 * Initialize a RNG.
 	 */
 	int r_status = randombytes(seed, SEEDLEN);
-	if (r_status != 1) {
+	if (r_status != 0) {
 		return -1;
 	}
 	inner_shake256_init(&sc);
@@ -287,7 +287,7 @@ falcon_sign(unsigned char *sm, const unsigned char *m,
 	unsigned long long mlen, const unsigned char *sk)
 {
 	int r = randombytes(sm + 2, NONCELEN);
-	if (r != 1) {
+	if (r != 0) {
 		return -1;
 	}
 	return falcon_sign_core(sm,m,mlen,sk);

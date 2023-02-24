@@ -14,7 +14,8 @@ const testNet = {
 	"alias": "testnet",
 	"networkMagic": 0xEDF1DFED,
 	"dnsSeeds": [],
-	"ip": []
+	"ip": [
+	]
 }
 
 export default { mainNet, testNet }

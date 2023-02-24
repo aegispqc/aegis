@@ -1,7 +1,7 @@
 import * as cpt from 'crypto';
 import { verifyMulti } from '../blockchain/signType';
 import { Falcon512 } from '../pqc/nistRound3/falcon';
-import { encryption, decryption } from './aes256gmc';
+import { encryption, decryption } from './aes256gcm';
 import { FullSkewedHashTree } from './fullSkewedHashTree';
 import { sha2d, shake256, shake256XOF } from './hash';
 import { Secp256k1 } from './secp256k1';

@@ -1,4 +1,4 @@
-import { PQCert, creatPQCertRoot, creatPQCertPubKey, creatPQCertGroup, PQCertType, PQCertRoot, PQCertPubKey, PQCertGroup } from './pqcert';
+import { PQCert, createPQCertRoot, createPQCertPubKey, createPQCertGroup, PQCertType, PQCertRoot, PQCertPubKey, PQCertGroup } from './pqcert';
 import { getCompactSizeBufferByNumber, BufferReader } from './util';
 import {
 	vinJsonData, voutJsonData, blockTxJsonData,
@@ -660,13 +660,13 @@ class BlockTx {
 
 		for (let i = 0; i < pqcertCount; i++) {
 			if (jsonData.pqcert[i].pqcertType === 0) {
-				pqcert[i] = creatPQCertRoot(<PQCertRootJsonData>jsonData.pqcert[i]);
+				pqcert[i] = createPQCertRoot(<PQCertRootJsonData>jsonData.pqcert[i]);
 			}
 			else if (jsonData.pqcert[i].pqcertType === 1) {
-				pqcert[i] = creatPQCertPubKey(<PQCertPubKeyJsonData>jsonData.pqcert[i]);
+				pqcert[i] = createPQCertPubKey(<PQCertPubKeyJsonData>jsonData.pqcert[i]);
 			}
 			else if (jsonData.pqcert[i].pqcertType === 2) {
-				pqcert[i] = creatPQCertGroup(<PQCertGroupJsonData>jsonData.pqcert[i]);
+				pqcert[i] = createPQCertGroup(<PQCertGroupJsonData>jsonData.pqcert[i]);
 			}
 			else {
 				return false;

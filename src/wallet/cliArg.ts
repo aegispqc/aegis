@@ -205,7 +205,7 @@ let methodParamsType = {
 	walletGetBalance: [],
 	walletCreateTransation: [chAddress, chAddress, chBigInt, chBigInt, chBigInt, chBool, chBool],
 	walletCreateAdvancedTransation: [chAddress, chAddessValueArray, chBigInt, chBigInt, chBool, chBool, chBool],
-	walletSend: [chAddress, chStr, chBigInt, chObj, chStr, chBigInt, chBool, chAddress],
+	walletSend: [chAddress, chAddress, chBigInt, chObj, chStr, chBigInt, chBool, chAddress, chBool],
 	walletSendMany: [chAddress, chAddessValueArray, chObj, chStr, chBigInt, chBool, chAddress],
 	walletASend: [chAddessArray, chAddessValueArray, chBigInt], // -------------------------------- test ----------------
 	txAddPqcertRoot: [chAddress, chStr],
@@ -228,6 +228,7 @@ let methodParamsType = {
 	getBlockDataByHeight: [chUint, chBool, chBool],
 	getTransactionByTxid: [chStr, chBool],
 	getPqcertByHash: [chStr, chBool],
+	getPqcertDetailsByHash: [chStr, chBool],
 	getTxPoolList: [],
 	getTxPoolByTxid: [chStr],
 	newBlock: [chObj],

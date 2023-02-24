@@ -7,8 +7,8 @@ type CacheData = {
 	feeRatio: number;
 	address: {
 		[key: string]: {
-			sendValue: 0n;
-			receiveValue: 0n;
+			sendValue: bigint;
+			receiveValue: bigint;
 		};
 	};
 	mining?: boolean;
@@ -19,6 +19,12 @@ type CacheDataJson = {
 	blockTx: any;
 	time: number;
 	feeRatio: number;
+	address: {
+		[key: string]: {
+			sendValue: bigint;
+			receiveValue: bigint;
+		};
+	};
 	mining?: boolean;
 };
 
@@ -29,8 +35,8 @@ type CacheList = {
 	address?:
 	{
 		[key: string]: {
-			sendValue: 0n;
-			receiveValue: 0n;
+			sendValue: bigint;
+			receiveValue: bigint;
 		};
 	};
 }[];
@@ -43,7 +49,7 @@ class CacheTx {
 	private lastVout: { [key: number]: string };
 	private pqcert: { [key: number]: boolean };
 	private timeOut: number;
-	constructor(cacheMax: number, timeOut: number = 1800000) {
+	constructor(cacheMax: number, timeOut: number = 21600000) {
 		this.data = [];
 		this.hash = {};
 		this.miningTx = {};
@@ -275,6 +281,7 @@ class CacheTx {
 			blockTx: blockTx,
 			time: data.time,
 			feeRatio: data.feeRatio,
+			address: data.address,
 			mining
 		};
 	}

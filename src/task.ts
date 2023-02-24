@@ -9,25 +9,19 @@ import { delay, objectIsEmpty, testMinerAsync } from "./blockchain/util";
 import { BlockDataFormat } from "./db/lmdb/blockchainDb";
 import { WalletHistoryDb } from "./wallet/walletHistoryDb";
 import { CacheData, CacheDataJson, CacheTx } from "./blockchain/cacheTx";
-import { equationsOffset } from "./blockchain/pow";
+import { powParameter, setPow } from "./blockchain/pow";
 import Notify from "./blockchain/notify";
 import EventEmitter from "events";
 import { OpReturn } from "./blockchain/blockTx";
 import crypto from 'crypto';
-
-let GBHBuf = Buffer.from('00000000000000000000000000000000000000000000000000000000000000000000000039cea7e7726e8e21cac9799a85b5a820955ea30e7cd9f251d1ab65a5b79587df00208c620b0008b42fe527e00000000000000000000000000000000000000000000000000000', 'hex');
-let GBTxBuf = Buffer.from('0000000001000400000000ffffffff0100f08296050000002220b807bc0b4a12331a064be57f0380a44b14b43b2c09320e2f7abb3310f4601c16fc00324d6f7265207468616e207365637572652e006dc7a564cac9c45a2564d5c52e9e8e60ef54c491f8be283919dfa8b2a774d0aa00000000', 'hex');
-let GB = BlockData.dataFormatToClass({
-	height: 0,
-	header: GBHBuf,
-	txs: [GBTxBuf]
-});
+import GB from './genesis/genesis';
+import TESTGB from './genesis/testGenesis';
 
 class Task {
 	private taskQueue: TaskQueue;
 	private getMiningBlockWaitRes: any[];
 	private createMiningBlockFlag: boolean;
-
+	private testMode: boolean;
 	core: Core;
 	cacheTx: CacheTx;
 	walletHistory?: WalletHistoryDb;
@@ -38,12 +32,19 @@ class Task {
 	constructor(taskOpt: { taskAmount?: number, cacheMax?: number } = {},
 		coreOpt: { dbDir?: string, minerFeeRatio?: bigint },
 		walletHistoryOpt?: { dbDir?: string },
-		notify?: { blockNotify?: string, blockForkNotify?: string, txNotify?: string }) {
+		notify?: { blockNotify?: string, blockForkNotify?: string, txNotify?: string }, 
+		testMode?: boolean) {
 		//-------
 		let taskAmount = (taskOpt.taskAmount != undefined) ? taskOpt.taskAmount : 256;
 		let cacheMax = (taskOpt.cacheMax != undefined) ? taskOpt.cacheMax : 8192;
+		this.testMode = (testMode) ? true : false ;
+		if (testMode) {
+			setPow(19, 60, 120);
+			console.log('Test mode is now enabled!');
+		}
+
 		this.taskQueue = new TaskQueue(taskAmount);
-		this.core = new Core(coreOpt.dbDir, coreOpt.minerFeeRatio);
+		this.core = new Core(coreOpt.dbDir, coreOpt.minerFeeRatio, this.testMode);
 		this.cacheTx = new CacheTx(cacheMax);
 		this.walletHistory = (walletHistoryOpt) ? new WalletHistoryDb(this.core, walletHistoryOpt.dbDir) : undefined;
 		this.mc = new minerController();
@@ -51,7 +52,7 @@ class Task {
 		this.notify = new Notify();
 		this.getMiningBlockWaitRes = [];
 		this.createMiningBlockFlag = false;
-
+		
 		if (notify) {
 			for (let x in notify) {
 				this.notify.add(x, notify[x]);
@@ -89,7 +90,7 @@ class Task {
 		let coreInitR = this.core.init();
 		await this.mc.init();
 		if (!coreInitR) {
-			if (GB) {
+			if (GB && !this.testMode) {
 				console.log('Genesis is not found, so create.');
 				let r = await this.core.createGenesis(GB);
 				if (!r) {
@@ -98,6 +99,19 @@ class Task {
 				this.core.init();
 				console.log('Creating genesis succeeded!');
 				return r;
+			}
+			else if (TESTGB && this.testMode) {
+				console.log('testGenesis is not found, so create.');
+				let r = await this.core.createGenesis(TESTGB);
+				if (!r) {
+					return r;
+				}
+				this.core.init();
+				console.log('Creating testGenesis succeeded!');
+				return r;
+			}
+			else {
+				return false;
 			}
 		}
 		return true;
@@ -157,6 +171,10 @@ class Task {
 
 	getPqcertByHash(...input: Parameters<Core['getPqcertByHash']>) {
 		return this.core.getPqcertByHash(...input);
+	}
+
+	getPqcertDetailsByHash(...input: Parameters<Core['getPqcertByHash']>) {
+		return this.core.getPqcertDetailsByHash(...input);
 	}
 
 	getSignedTxs(...input: Parameters<Core['getSignedTxs']>) {
@@ -251,7 +269,7 @@ class Task {
 				this.cacheTx.popTx();
 			}
 
-			let address = {}, allLastHashs: { hash: Buffer; voutn: number; }[] = [];
+			let address: {[key: string]: { sendValue: bigint; receiveValue: bigint }} = {}, allLastHashs: { hash: Buffer; voutn: number; }[] = [];
 			for (let j = 0; j < blockTx.vin.length; j++) {
 				let lastHashs = blockTx.vin[j].getLastVoutHashAll();
 				if (!lastHashs) {
@@ -261,16 +279,12 @@ class Task {
 				if (!lastHashs[0]) {
 					continue
 				}
-				let tx = this.walletHistory.checkTxInput(lastHashs[0].hash, lastHashs[0].voutn)
-				if (tx) {
-					if (!address[tx.address]) {
-						address[tx.address] = { sendValue: 0n, receiveValue: 0n };
-					}
-					address[tx.address].sendValue += tx.value;
-				}
-				for (let k = 1; k < lastHashs.length; k++) {
+				for (let k = 0; k < lastHashs.length; k++) {
 					let tx = this.walletHistory.checkTxInput(lastHashs[k].hash, lastHashs[k].voutn)
 					if (tx) {
+						if (!address[tx.address]) {
+							address[tx.address] = { sendValue: 0n, receiveValue: 0n };
+						}
 						address[tx.address].sendValue += tx.value;
 					}
 				}
@@ -285,7 +299,6 @@ class Task {
 				addr = addr.toString('hex');
 				let watchAddr = this.walletHistory.getWatchAddresses();
 				if (watchAddr && watchAddr[addr]) {
-					// address[addr] = true;
 					if (!address[addr]) {
 						address[addr] = { sendValue: 0n, receiveValue: 0n };
 					}
@@ -526,6 +539,7 @@ class Task {
 			this.mc.stopContinuous();
 		}
 		else {
+			//- set gpu ----
 			if (this.mc.minerRunFlag) {
 				console.log('miner already start!!');
 				return;
@@ -536,7 +550,34 @@ class Task {
 			}
 			console.log('miner start!!');
 			this.mc.startContinuous();
+			this.mc.allGpuEnable();
 			this.mineOnce(address, inCacheTxFlag, testFlag);
+		}
+	}
+
+	/**
+	 * @param {Buffer|false} address Receiving address. If set `false` then stop mine.
+	 * @param {boolean[]} gpuUse 
+	 */
+	 async mineAdvance(address: Buffer | false, gpuUse?: boolean[]) {
+		if (address === false) {
+			console.log('miner stop!!');
+			this.mc.stopContinuous();
+		}
+		else {
+			//- set gpu ----
+			if (this.mc.minerRunFlag) {
+				console.log('miner already start!!');
+				return;
+			}
+			if (!this.mc.minerBinHashCheck) {
+				console.log('minerBinHash was change!');
+				return;
+			}
+			console.log('miner start!!');
+			this.mc.startContinuous();
+			this.mc.setGpuEnable(gpuUse);
+			this.mineOnce(address, true, false);
 		}
 	}
 
@@ -575,7 +616,7 @@ class Task {
 		}
 
 		let seed = miningBlock.blockHeader.getPowSeed();
-		let m = miningBlock.blockHeader.rawNBit.readUInt8(0) + equationsOffset;
+		let m = miningBlock.blockHeader.rawNBit.readUInt8(0) + powParameter.equationsOffset;
 		let n = m + 5;
 		let mqphash = new MQPHash(seed, m, n);
 
@@ -586,7 +627,7 @@ class Task {
 		}
 		else {
 			let whichXWidth: number = 1000;
-			await this.mc.setup(mqphash, miningBlock.blockHeader.rawNBit, null, whichXWidth);
+			await this.mc.setup(mqphash, miningBlock.blockHeader.rawNBit, whichXWidth);
 			x = await this.mc.getX();
 		}
 
@@ -1153,8 +1194,15 @@ class Task {
 		return { confirmed: r.confirmed, unconfirmed: r.unconfirmed };
 	}
 
+	async getGPUStatus() {
+        let r = await minerController.getGPUStatus();
+        return r;
+    }
+
 	async exit() {
 		await this.taskQueue.terminate();
+		await this.core.exit();
+		await this.walletHistory?.exit();
 		console.log('Task exit');
 	}
 }

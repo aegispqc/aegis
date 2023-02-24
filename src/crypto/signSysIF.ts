@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { decryption } from "./aes256gmc";
+import { decryption } from "./aes256gcm";
 
 type coreApiType = {
 	genkey: (publicKey: Buffer, privateKey: Buffer, seed: Buffer) => boolean;

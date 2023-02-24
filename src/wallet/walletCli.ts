@@ -93,7 +93,7 @@ class WalletCli {
 		this.jsonSpace = typeof (opt?.jsonSpace) === "boolean" ? opt?.jsonSpace : true;
 		this.jsonColor = typeof (opt?.jsonColor) === "boolean" ? opt?.jsonColor : true;
 		this.addressBs58ck = typeof (opt?.addressBs58ck) === "boolean" ? opt?.addressBs58ck : true;
-		this.bigIntObjFloatFlag = typeof (opt?.bigIntObjFloatFlag) === "boolean" ? opt?.addressBs58ck : true;
+		this.bigIntObjFloatFlag = typeof (opt?.bigIntObjFloatFlag) === "boolean" ? opt?.bigIntObjFloatFlag : true;
 		this.runFlag = false;
 		this.methodParamsType = (this.bigIntObjFloatFlag) ? methodParamsTypeBigIntFloat : methodParamsType;
 		this.rl = (opt.rl) ? opt.rl : readline.createInterface(stdin, stdout, completer);
@@ -446,12 +446,12 @@ class WalletCli {
 		}
 
 		let r = await this.wallet.importWallet(walletJson, aesKey);
-		if (!r) {
+		if (!r || !Array.isArray(r?.address)) {
 			return false;
 		}
 
 		for (let i = 0; i < r.address.length; i++) {
-			let address = r[i];
+			let address = r.address[i];
 			let req = await this.post({
 				method: "walletAddWatchAddress",
 				params: [address]
@@ -1445,6 +1445,10 @@ class WalletCli {
 		let viewAddress = { srcAddressList: [], target: [] };
 		for (let i = 0; i < srcAddressList.length; i++) {
 			viewAddress.srcAddressList[i] = srcAddressList[i];
+			if (srcAddressDuplicateTable[srcAddressList[i]]) {
+				return { error: 'ERROR: The srcAddress are duplicated' };
+			}
+			srcAddressDuplicateTable[srcAddressList[i]] = true;
 			if (checkAddressIsBs58ck(srcAddressList[i])) {
 				let bs58 = bs58ck.decode(srcAddressList[i]);
 				if (!bs58) {
@@ -1453,9 +1457,6 @@ class WalletCli {
 				srcAddressList[i] = bs58.toString('hex');
 				if (!this.wallet.addressDoseExist(srcAddressList[i])) {
 					return { error: 'ERROR: srcAddress is not found' };
-				}
-				if (srcAddressDuplicateTable[srcAddressList[i]]) {
-					return { error: 'ERROR: The srcAddress are duplicated' };
 				}
 			}
 		}

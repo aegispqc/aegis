@@ -3,7 +3,7 @@ import { getSignSys } from "../blockchain/signType";
 import { FullSkewedHashTree } from "../crypto/fullSkewedHashTree";
 import { sha2d, shake256, shake256XOF } from "../crypto/hash";
 import { serialize, deserialize } from 'bson';
-import { encryption, decryption } from '../crypto/aes256gmc';
+import { encryption, decryption } from '../crypto/aes256gcm';
 import { Keypair } from "./walletDb";
 import { SafePasswordBuf } from "../crypto/safePassword";
 
@@ -76,15 +76,16 @@ function recoveryKey(seed: Buffer, addrSeed: Buffer, aesKey?: SafePasswordBuf): 
 	let seedJson = deserialize(seed, { promoteBuffers: true });
 	let keySeed = seedJson.seed;
 	if (aesKey) {
-
 		keySeed = decryption(keySeed, aesKey.data);
+		if (!keySeed) {
+			return false;
+		}
 	}
 	let fhashtree = getSeedTree(keySeed, seedJson.keyTypes.length);
 	let keys: any = [];
 
 	for (let i = 0; i < seedJson.keyTypes.length; i++) {
 		let sign = getSignSys(seedJson.keyTypes[i][1]);
-
 		if (!sign) {
 			return false;
 		}
