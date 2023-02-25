@@ -16,11 +16,11 @@ The current digital signature algorithms used by AEGIS are as follows:
 ### 1. Start full node
 linux
 ```bash
-./app
+./aegis
 ```
 windows
 ```bash
-./app.exe
+./aegis.exe
 ```
 #### Setting full node config
 Execute the full node for the first time, it will ask for configuration parameters.
@@ -48,11 +48,11 @@ eventLog.p2p: true
 ### 2. Start walletCli
 linux
 ```bash
-./index wallet
+./aegis wallet
 ```
 windows
 ```bash
-./index.exe wallet
+./aegis.exe wallet
 ```
 #### setting wallet config
 Enter the individual needs in order.
@@ -73,11 +73,11 @@ bigIntObjFloatFlag: true
 #### Start walletCli
 linux
 ```bash
-./index wallet
+./aegis wallet
 ```
 windows
 ```bash
-./index.exe wallet
+./aegis.exe wallet
 ```
 #### Generate a wallet
 ```bash
