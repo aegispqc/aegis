@@ -91,7 +91,7 @@ async function init(config, notify?: { blockNotify?: string, blockForkNotify?: s
 	if (config.eventLog) {
 		if (config.eventLog.newBlock) {
 			task.eventEmit.on('newBlock', (m) => {
-				console.log(`newBlock: "${m.toString('hex')}"`);
+				console.log(`newBlock: "${m.hash.toString('hex')}" ${m.txsLen} txs; ${m.photon} photon; ${m.bytes} bytes`);
 			});
 		}
 		if (config.eventLog.forkBlock) {

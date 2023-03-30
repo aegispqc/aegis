@@ -377,6 +377,9 @@ class Task {
 		}
 
 		let hash = r.data.data;
+		let txsLen = blockData.txs.length;
+		let photon = blockData.getPhoton();
+		let bytes = blockData.getBytes();
 		let miningBlock = this.core.miningBlock;
 		this.core.clearMint();
 
@@ -404,7 +407,7 @@ class Task {
 		this.cacheTx.freeCacheTxTimeOut();
 		this.updateWalletByBlockHash(hash);
 		this.mc.stopFind();
-		this.eventEmit.emit('newBlock', hash);
+		this.eventEmit.emit('newBlock', { hash, txsLen, photon, bytes });
 		return { data: hash };
 	}
 

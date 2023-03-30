@@ -89,7 +89,8 @@ class P2pStatusDb {
 		this.dbRoot = lmdb.open({
 			path: this.dbDir,
 			name: 'p2p_status',
-			maxReaders: 1
+			maxReaders: 1,
+			overlappingSync: true
 		});
 		this.blacklistDb = this.dbRoot.openDB({ name: `blacklist`, keyIsBuffer: true });
 		this.peerDb = this.dbRoot.openDB({ name: `peerlist`, keyIsBuffer: true });
@@ -364,6 +365,7 @@ class P2pStatusDb {
 	}
 
 	async exit() {
+		await this.dbRoot.flushed;
 		await this.dbRoot.close();
 		console.log('P2P db exit');
 	}

@@ -212,7 +212,8 @@ class WalletHistoryDb {
 			path: this.dbDir,
 			name: 'wallet',
 			maxDbs: 12,
-			maxReaders: 1
+			maxReaders: 1,
+			overlappingSync: true
 		});
 
 		this.optionDb = this.dbRoot.openDB({ name: 'option' });
@@ -811,6 +812,7 @@ class WalletHistoryDb {
 
 	async exit(){
 		await this.taskQueue.terminate();
+		await this.dbRoot.flushed;
 		await this.dbRoot.close();
 		console.log('Wallet history db exit');
 	}

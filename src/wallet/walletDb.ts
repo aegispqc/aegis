@@ -78,7 +78,8 @@ class WalletDb {
 		this.dbRoot = lmdb.open({
 			path: this.dbDir,
 			name: 'wallet',
-			maxReaders: 1
+			maxReaders: 1,
+			overlappingSync: true
 		});
 
 		this.keyPairDb = this.dbRoot.openDB({ name: `wallet_keypair`, keyIsUint32: true });
@@ -331,6 +332,7 @@ class WalletDb {
 
 	async exit() {
 		await this.taskQueue.terminate();
+		await this.dbRoot.flushed;
 		await this.dbRoot.close();
 		console.log('Wallet db task exit');
 	}

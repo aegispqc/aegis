@@ -48,14 +48,16 @@ class BlockchainDb {
 			path: dbPath,
 			name: 'blockchain',
 			maxDbs: 10,
-			maxReaders: 1
+			maxReaders: 1,
+			overlappingSync: true
 		});
 		/** Covered db */
 		this.coveredDb = lmdb.open({
 			path: `${dbPath}/covered`,
 			name: 'covered',
 			maxDbs: 2,
-			maxReaders: 1
+			maxReaders: 1,
+			overlappingSync: true
 		});
 		/** Block db */
 		this.blockDb = this.dbRoot.openDB({ name: 'block_data', keyEncoding: 'binary' });
@@ -438,7 +440,10 @@ class BlockchainDb {
 	 * 
 	 */
 	async exit(){
+		await this.dbRoot.flushed;
 		await this.dbRoot.close();
+		await this.coveredDb.flushed;
+		await this.coveredDb.close();
 		console.log('Block db exit');
 	}
 }

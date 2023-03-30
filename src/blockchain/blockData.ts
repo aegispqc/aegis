@@ -25,6 +25,7 @@ class BlockData {
 	readonly fee: bigint;
 
 	private totalPhoton: number;
+	private totalBytes: number;
 	private lastVout: { [key: number]: { [key: number]: boolean } };
 	private pqcert: { [key: number]: boolean };
 
@@ -42,6 +43,7 @@ class BlockData {
 		this.txids = {};
 		this.fee = fee;
 		this.totalPhoton = this.blockHeader.serialize.length;
+		this.totalBytes = this.blockHeader.serialize.length;
 		this.lastVout = {};
 		this.pqcert = {};
 	}
@@ -68,7 +70,8 @@ class BlockData {
 		let blockTx = new BlockTx([coinbase.vin], [coinbase.vout], pqcert, opReturn, 0);
 
 		let photon = blockTx.getPhoton();
-		if (!photon) {
+		let size = blockTx.getSize();
+		if (!photon || !size) {
 			return false;
 		}
 
@@ -77,6 +80,7 @@ class BlockData {
 		}
 
 		this.totalPhoton += photon;
+		this.totalBytes += size;
 
 		let txid = blockTx.getHash('hex');
 		if (!txid) {
@@ -138,7 +142,8 @@ class BlockData {
 		}
 
 		let photon = blockTx.getPhoton();
-		if (!photon) {
+		let size = blockTx.getSize();
+		if (!photon || !size) {
 			return { err: -1 };
 		}
 
@@ -147,6 +152,7 @@ class BlockData {
 		}
 
 		this.totalPhoton += photon;
+		this.totalBytes += size;
 
 		for (let j = 0; j < blockTx.vin.length; j++) {
 			let lastVoutHash = blockTx.vin[j].getLastVoutHashAll();
@@ -390,6 +396,14 @@ class BlockData {
 		}
 
 		return blockData;
+	}
+
+	getPhoton() {
+		return this.totalPhoton;
+	}
+
+	getBytes() {
+		return this.totalBytes;
 	}
 }
 
