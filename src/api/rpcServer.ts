@@ -113,7 +113,7 @@ class RpcServer {
 		});
 
 		this.task.eventEmit.on('newBlock', (m) => {
-			this.newBlockPollCollector.send(m.toString('hex'));
+			this.newBlockPollCollector.send(m);
 		});
 		this.task.eventEmit.on('forkBlock', (m) => {
 			this.forkBlockPollCollector.send({ startHeight: m.startHeight, endHeight: m.endHeight, blockHashList: m.blockHashList.map(x => x.toString('hex')) });
