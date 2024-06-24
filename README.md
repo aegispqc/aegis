@@ -1,6 +1,8 @@
 # AEGIS 
 AEGIS is a brand-new, experimental quantum-resistant cryptocurrency that conceptualizes the decentralization of the Bitcoin white paper, integrates a variety of digital signature algorithms based on modern cryptography and post-quantum cryptography, and improves the efficiency of various algorithmic applications.
 
+**The aegisPQC code is complete, please feel free to maintain and fork it.**
+
 ## What is AEGIS Core?
 AEGIS Core is programmed to decide which blockchain contains valid transactions with multiple post-quantum signature algorithms.  
   
