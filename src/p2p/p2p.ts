@@ -213,7 +213,6 @@ export default class P2P {
 		});
 
 		this.#p2pEvent.on('newBlock', async (blockHash: Buffer) => {
-			if (!Buffer.isBuffer(blockHash)) return;
 			await this.#updateLastHeight();
 			if (this.#flagBlockInSync) {
 				this.#map((peer: Peer) => {
