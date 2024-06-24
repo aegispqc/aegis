@@ -6,7 +6,7 @@
 	"pkg": {
 		"script": "dist/index.js",
 		"assets": ["./node_modules/@lmdb/lmdb-win32-x64", "./dist/src/miner/mineBin/mineWin.exe"],
-		"targets": ["node16-win-x64"],
+		"targets": ["node18-win-x64"],
 		"outputPath": "bin/pkg/"
 	},
 	"dependencies": {
