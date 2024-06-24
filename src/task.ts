@@ -78,7 +78,7 @@ class Task {
 		}
 
 		this.eventEmit.on('newBlock', (m) => {
-			this.notify.exec('blockNotify', m.toString('hex'));
+			this.notify.exec('blockNotify', JSON.stringify(m));
 		});
 		this.eventEmit.on('forkBlock', (m) => {
 			this.notify.exec('blockForkNotify', JSON.stringify({ startHeight: m.startHeight, endHeight: m.endHeight, blockHashList: m.blockHashList.map(x => x.toString('hex')) }));
