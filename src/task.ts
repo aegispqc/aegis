@@ -527,7 +527,7 @@ class Task {
 
 		this.core.init();
 		this.eventEmit.emit('forkBlock', tk.data);
-
+		this.eventEmit.emit('newBlock', { hash: tk?.data?.blockHashList?.slice(-1) });
 		return true;
 	}
 
