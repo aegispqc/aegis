@@ -150,7 +150,7 @@ class minerController {
 		if (this.size <= 1) {
 			this._fixNumber = 0;
 		}
-		else if (this.size = 2) {
+		else if (this.size <= 2) {
 			this._fixNumber = 1;
 		}
 		else if (this.size <= 4) {
